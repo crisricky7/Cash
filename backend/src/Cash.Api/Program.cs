@@ -77,6 +77,7 @@ protectedApi.MapPost("/transactions", async (CreateTransactionRequest req, Claim
 // Endpoints de Exportación CSV y Pasarelas de Pago (Payphone + RevenueCat)
 app.MapExportEndpoints();
 app.MapBillingEndpoints();
+app.MapSmartFeaturesEndpoints();
 
 app.Run();
 
