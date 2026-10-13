@@ -8,24 +8,14 @@ void main() {
   runApp(const ProviderScope(child: CashApp()));
 }
 
-// ============================================================================
-// CONFIGURACIÓN DE CREDENCIALES DE PASARELAS (PAYPHONE WEB & REVENUECAT MOBILE)
-// ============================================================================
 class BillingConfig {
-  // Payphone Business (Ecuador / LatAm - Web)
-  static const String payphoneStoreId = 'STORE_ID_PAYPHONE_BUSINESS';
-  static const String payphoneConfirmEndpoint = '/api/billing/payphone/confirm';
-
-  // RevenueCat (Google Play Billing & Apple StoreKit 2)
-  static const String revenueCatGooglePlayApiKey = 'goog_PUBLIC_SDK_KEY_ANDROID';
-  static const String revenueCatAppStoreApiKey = 'appl_PUBLIC_SDK_KEY_IOS';
   static const String entitlementId = 'cash_pro';
   static const String monthlyOfferingId = 'cash_pro_monthly_499';
   static const String annualOfferingId = 'cash_pro_annual_3999';
 }
 
 // ============================================================================
-// MODELOS DE DOMINIO Y ESTADO REACTIVO (RIVERPOD)
+// MODELOS DE DOMINIO Y PROVIDERS DINÁMICOS
 // ============================================================================
 class AuthSession {
   final String fullName;
@@ -37,19 +27,36 @@ class AuthSession {
 class AccountModel {
   final String id;
   final String name;
-  final String type;
+  final String type; // Banco, Billetera Digital, Efectivo, Tarjeta de Crédito, Ahorro, Cooperativa
   final double balance;
   AccountModel({required this.id, required this.name, required this.type, required this.balance});
 
-  AccountModel copyWith({double? balance}) =>
-      AccountModel(id: id, name: name, type: type, balance: balance ?? this.balance);
+  AccountModel copyWith({String? name, String? type, double? balance}) => AccountModel(
+        id: id,
+        name: name ?? this.name,
+        type: type ?? this.type,
+        balance: balance ?? this.balance,
+      );
+}
+
+class CategoryModel {
+  final String id;
+  final String name;
+  final int type; // 1 = Ingreso, 2 = Gasto
+  final double monthlyBudget;
+  CategoryModel({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.monthlyBudget,
+  });
 }
 
 class TxItem {
   final String id;
   final String description;
   final double amount;
-  final int type; // 1 = Ingreso, 2 = Gasto
+  final int type; // 1 = Ingreso, 2 = Gasto, 3 = Transferencia / Recarga Billetera
   final String categoryName;
   final String accountName;
   final String memberName;
@@ -118,9 +125,9 @@ class RecurringBillModel {
 class ActiveSubscriptionInfo {
   final bool isPro;
   final String planName;
-  final String gateway; // Payphone Web | RevenueCat Google Play | RevenueCat App Store
+  final String gateway;
   final String lastAuthCode;
-  final String selectedBillingCycle; // monthly | annual
+  final String selectedBillingCycle;
 
   ActiveSubscriptionInfo({
     required this.isPro,
@@ -146,26 +153,48 @@ class ActiveSubscriptionInfo {
       );
 }
 
-// Providers globales
+// Estado global
 final authSessionProvider = StateProvider<AuthSession?>((ref) => null);
 final isDarkModeProvider = StateProvider<bool>((ref) => false);
 final navIndexProvider = StateProvider<int>((ref) => 0);
 final selectedMemberFilterProvider = StateProvider<String?>((ref) => null);
 final searchQueryProvider = StateProvider<String>((ref) => '');
-final gatewayPreviewModeProvider = StateProvider<String>((ref) => kIsWeb ? 'WEB_PAYPHONE' : 'MOBILE_REVENUECAT');
+final gatewayPreviewModeProvider =
+    StateProvider<String>((ref) => kIsWeb ? 'WEB_PAYPHONE' : 'MOBILE_REVENUECAT');
 
 final subscriptionProvider = StateProvider<ActiveSubscriptionInfo>((ref) => ActiveSubscriptionInfo(
-      isPro: false,
-      planName: 'Plan Hogar Básico (Gratis)',
-      gateway: 'Ninguna',
-      lastAuthCode: '-',
+      isPro: true,
+      planName: 'Cash Pro Familiar (Demo Activo)',
+      gateway: 'Sandbox',
+      lastAuthCode: 'PRO-DEMO',
       selectedBillingCycle: 'annual',
     ));
 
+// Catálogo parametrizable de Cuentas (Incluye Billetera Digital como opción de saldo)
 final accountsProvider = StateProvider<List<AccountModel>>((ref) => [
-      AccountModel(id: '1', name: 'Cuenta Bancaria Principal', type: 'Banco', balance: 1850.00),
-      AccountModel(id: '2', name: 'Efectivo Hogar (Caja Chica)', type: 'Efectivo', balance: 280.00),
-      AccountModel(id: '3', name: 'Fondo de Reserva Familiar', type: 'Ahorro', balance: 3200.00),
+      AccountModel(id: 'a1', name: 'Cuenta Bancaria Principal', type: 'Banco', balance: 1850.00),
+      AccountModel(
+          id: 'a2',
+          name: 'Billetera Digital (Payphone / Deuna)',
+          type: 'Billetera Digital',
+          balance: 195.00),
+      AccountModel(
+          id: 'a3', name: 'Efectivo Hogar (Caja Chica)', type: 'Efectivo', balance: 280.00),
+      AccountModel(id: 'a4', name: 'Fondo de Reserva Familiar', type: 'Ahorro', balance: 3200.00),
+    ]);
+
+// Catálogo parametrizable de Categorías
+final categoriesProvider = StateProvider<List<CategoryModel>>((ref) => [
+      CategoryModel(
+          id: 'c1', name: 'Supermercado y Alimentación', type: 2, monthlyBudget: 600.00),
+      CategoryModel(
+          id: 'c2', name: 'Servicios Básicos (Luz/Agua/Net)', type: 2, monthlyBudget: 180.00),
+      CategoryModel(id: 'c3', name: 'Educación y Hogar', type: 2, monthlyBudget: 350.00),
+      CategoryModel(id: 'c4', name: 'Salud y Bienestar', type: 2, monthlyBudget: 200.00),
+      CategoryModel(id: 'c5', name: 'Transporte y Combustible', type: 2, monthlyBudget: 150.00),
+      CategoryModel(id: 'c6', name: 'Ingresos / Salario Mensual', type: 1, monthlyBudget: 0.00),
+      CategoryModel(
+          id: 'c7', name: 'Honorarios / Ingresos Extra', type: 1, monthlyBudget: 0.00),
     ]);
 
 final transactionsListProvider = StateProvider<List<TxItem>>((ref) => [
@@ -181,26 +210,36 @@ final transactionsListProvider = StateProvider<List<TxItem>>((ref) => [
       ),
       TxItem(
         id: 't2',
-        description: 'Pago Fibra Óptica + Energía Eléctrica',
-        amount: 92.50,
+        description: 'Pago Rápido QR en Panadería y Café',
+        amount: 14.50,
         type: 2,
-        categoryName: 'Servicios Básicos (Luz/Agua/Net)',
-        accountName: 'Cuenta Bancaria Principal',
+        categoryName: 'Supermercado y Alimentación',
+        accountName: 'Billetera Digital (Payphone / Deuna)',
         memberName: 'Pareja',
-        date: DateTime.now().subtract(const Duration(days: 2)),
+        date: DateTime.now().subtract(const Duration(days: 1)),
       ),
       TxItem(
         id: 't3',
+        description: 'Recarga de Saldo a Billetera Digital',
+        amount: 100.00,
+        type: 3,
+        categoryName: 'Transferencia / Recarga',
+        accountName: 'Cuenta Bancaria Principal → Billetera Digital (Payphone / Deuna)',
+        memberName: 'Admin Hogar',
+        date: DateTime.now().subtract(const Duration(days: 2)),
+      ),
+      TxItem(
+        id: 't4',
         description: 'Ingreso Salario Mensual Hogar',
         amount: 2800.00,
         type: 1,
-        categoryName: 'Ingresos / Salario',
+        categoryName: 'Ingresos / Salario Mensual',
         accountName: 'Cuenta Bancaria Principal',
         memberName: 'Admin Hogar',
         date: DateTime.now().subtract(const Duration(days: 5)),
       ),
       TxItem(
-        id: 't4',
+        id: 't5',
         description: 'Útiles, Libros y Colación Escolar',
         amount: 48.00,
         type: 2,
@@ -245,15 +284,23 @@ final recurringBillsProvider = StateProvider<List<RecurringBillModel>>((ref) => 
         dueDay: 10,
         isPaid: false,
       ),
-      RecurringBillModel(
-        id: 'r3',
-        title: 'Plan de Energía y Agua Potable',
-        category: 'Servicios Básicos (Luz/Agua/Net)',
-        amount: 58.00,
-        dueDay: 18,
-        isPaid: false,
-      ),
     ]);
+
+// Helper visual para íconos según tipo de cuenta
+IconData getAccountTypeIcon(String type) {
+  switch (type) {
+    case 'Billetera Digital':
+      return Icons.qr_code_2;
+    case 'Efectivo':
+      return Icons.payments_outlined;
+    case 'Tarjeta de Crédito':
+      return Icons.credit_card;
+    case 'Ahorro':
+      return Icons.savings_outlined;
+    default:
+      return Icons.account_balance;
+  }
+}
 
 // ============================================================================
 // APP PRINCIPAL
@@ -267,7 +314,7 @@ class CashApp extends ConsumerWidget {
     final isDark = ref.watch(isDarkModeProvider);
 
     return MaterialApp(
-      title: 'Cash Pro · Payphone & RevenueCat',
+      title: 'Cash Pro · Control de Gastos Familiar',
       debugShowCheckedModeBanner: false,
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
@@ -290,7 +337,7 @@ class CashApp extends ConsumerWidget {
 }
 
 // ============================================================================
-// LOGIN MULTI-USUARIO (JWT)
+// PANTALLA DE LOGIN MULTI-USUARIO (JWT)
 // ============================================================================
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -335,7 +382,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 16),
                 const Text('Cash · Hogar',
                     style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-                const Text('Monetización integrada: Payphone Web & RevenueCat Mobile',
+                const Text('Bancos • Billeteras Digitales • Efectivo • Multi-Usuario',
                     textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 24),
                 Card(
@@ -406,15 +453,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 class ResponsiveHomeShell extends ConsumerWidget {
   const ResponsiveHomeShell({super.key});
 
-  void _openNewTransaction(BuildContext context, bool isWide) {
+  void _openNewTransaction(BuildContext context, bool isWide, {int initialType = 2}) {
     if (isWide) {
       showDialog(
         context: context,
         builder: (_) => Dialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 500),
-            child: const NewTxModal(),
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: NewTxModal(initialType: initialType),
           ),
         ),
       );
@@ -422,7 +469,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        builder: (_) => const NewTxModal(),
+        builder: (_) => NewTxModal(initialType: initialType),
       );
     }
   }
@@ -436,9 +483,9 @@ class ResponsiveHomeShell extends ConsumerWidget {
 
     final pages = [
       const DashboardView(),
+      const CatalogsSettingsView(),
       const AnalyticsAndExportView(),
-      const SavingsGoalsView(),
-      const RecurringBillsView(),
+      const GoalsAndRecurringView(),
       const MonetizationGatewaysView(),
     ];
 
@@ -461,7 +508,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      sub.isPro ? '★ PRO ACTIVO (${sub.gateway})' : 'MEJORAR A PRO',
+                      sub.isPro ? '★ PRO ACTIVO' : 'MEJORAR A PRO',
                       style: const TextStyle(
                           color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
@@ -480,15 +527,22 @@ class ResponsiveHomeShell extends ConsumerWidget {
                 icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
                 onPressed: () => ref.read(isDarkModeProvider.notifier).state = !isDark,
               ),
-              if (isWide)
+              if (isWide) ...[
+                OutlinedButton.icon(
+                  onPressed: () => _openNewTransaction(context, true, initialType: 3),
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('Recargar Billetera / Transferir'),
+                ),
+                const SizedBox(width: 8),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.only(right: 8),
                   child: FilledButton.icon(
-                    onPressed: () => _openNewTransaction(context, true),
+                    onPressed: () => _openNewTransaction(context, true, initialType: 2),
                     icon: const Icon(Icons.add),
                     label: const Text('Registrar Movimiento'),
                   ),
                 ),
+              ],
               IconButton(
                 icon: const Icon(Icons.logout),
                 onPressed: () => ref.read(authSessionProvider.notifier).state = null,
@@ -509,6 +563,11 @@ class ResponsiveHomeShell extends ConsumerWidget {
                       label: Text('Dashboard Hogar'),
                     ),
                     NavigationRailDestination(
+                      icon: Icon(Icons.account_balance_wallet_outlined),
+                      selectedIcon: Icon(Icons.account_balance_wallet),
+                      label: Text('Cuentas & Billeteras'),
+                    ),
+                    NavigationRailDestination(
                       icon: Icon(Icons.pie_chart_outline),
                       selectedIcon: Icon(Icons.pie_chart),
                       label: Text('Analítica & Excel CSV'),
@@ -516,12 +575,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
                     NavigationRailDestination(
                       icon: Icon(Icons.savings_outlined),
                       selectedIcon: Icon(Icons.savings),
-                      label: Text('Metas de Ahorro'),
-                    ),
-                    NavigationRailDestination(
-                      icon: Icon(Icons.event_repeat_outlined),
-                      selectedIcon: Icon(Icons.event_repeat),
-                      label: Text('Pagos Fijos'),
+                      label: Text('Metas & Pagos Fijos'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.credit_card_outlined),
@@ -548,10 +602,11 @@ class ResponsiveHomeShell extends ConsumerWidget {
                   onDestinationSelected: (i) => ref.read(navIndexProvider.notifier).state = i,
                   destinations: const [
                     NavigationDestination(icon: Icon(Icons.dashboard), label: 'Inicio'),
+                    NavigationDestination(
+                        icon: Icon(Icons.account_balance_wallet), label: 'Billeteras'),
                     NavigationDestination(icon: Icon(Icons.pie_chart), label: 'Reportes'),
                     NavigationDestination(icon: Icon(Icons.savings), label: 'Metas'),
-                    NavigationDestination(icon: Icon(Icons.event_repeat), label: 'Fijos'),
-                    NavigationDestination(icon: Icon(Icons.credit_card), label: 'Pasarelas'),
+                    NavigationDestination(icon: Icon(Icons.credit_card), label: 'Pro'),
                   ],
                 ),
           floatingActionButton: isWide
@@ -568,7 +623,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
 }
 
 // ============================================================================
-// PESTAÑA 1: DASHBOARD PRINCIPAL
+// PESTAÑA 1: DASHBOARD CON DESGLOSE DE SALDO EN BILLETERA DIGITAL
 // ============================================================================
 class DashboardView extends ConsumerWidget {
   const DashboardView({super.key});
@@ -576,12 +631,22 @@ class DashboardView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(accountsProvider);
+    final categories = ref.watch(categoriesProvider);
     final allTx = ref.watch(transactionsListProvider);
     final selectedMember = ref.watch(selectedMemberFilterProvider);
     final searchQuery = ref.watch(searchQueryProvider);
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     final totalBalance = accounts.fold(0.0, (s, a) => s + a.balance);
+    final bankBalance = accounts
+        .where((a) => a.type == 'Banco' || a.type == 'Ahorro' || a.type == 'Cooperativa')
+        .fold(0.0, (s, a) => s + a.balance);
+    final digitalWalletBalance = accounts
+        .where((a) => a.type == 'Billetera Digital')
+        .fold(0.0, (s, a) => s + a.balance);
+    final cashBalance =
+        accounts.where((a) => a.type == 'Efectivo').fold(0.0, (s, a) => s + a.balance);
+
     final income = allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
     final expense = allTx.where((t) => t.type == 2).fold(0.0, (s, t) => s + t.amount);
     final savingsRate = income > 0 ? ((income - expense) / income * 100).clamp(0.0, 100.0) : 0.0;
@@ -592,70 +657,225 @@ class DashboardView extends ConsumerWidget {
       final matchesMember = selectedMember == null || t.memberName == selectedMember;
       final matchesSearch = searchQuery.isEmpty ||
           t.description.toLowerCase().contains(searchQuery.toLowerCase()) ||
-          t.categoryName.toLowerCase().contains(searchQuery.toLowerCase());
+          t.categoryName.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          t.accountName.toLowerCase().contains(searchQuery.toLowerCase());
       return matchesMember && matchesSearch;
     }).toList();
+
+    final expenseCategories = categories.where((c) => c.type == 2).toList();
 
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        // Tarjeta Principal de Patrimonio + Desglose de Billetera Digital
         Card(
           elevation: 0,
           color: Theme.of(context).colorScheme.primaryContainer,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Wrap(
-              spacing: 24,
-              runSpacing: 16,
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Wrap(
+                  spacing: 24,
+                  runSpacing: 16,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text('Patrimonio Disponible (${accounts.length} Cuentas)',
-                        style: const TextStyle(fontSize: 14)),
-                    const SizedBox(height: 6),
-                    Text(currency.format(totalBalance),
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 16,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('▲ Ingresos: ${currency.format(income)}',
-                            style: TextStyle(
-                                color: Colors.green.shade800, fontWeight: FontWeight.bold)),
-                        Text('▼ Gastos: ${currency.format(expense)}',
-                            style:
-                                TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.bold)),
+                        Row(
+                          children: [
+                            Text('Patrimonio Total (${accounts.length} Opciones de Saldo)',
+                                style: const TextStyle(fontSize: 14)),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: () => ref.read(navIndexProvider.notifier).state = 1,
+                              icon: const Icon(Icons.account_balance_wallet, size: 16),
+                              label: const Text('Gestionar Billeteras'),
+                            ),
+                          ],
+                        ),
+                        Text(currency.format(totalBalance),
+                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 16,
+                          children: [
+                            Text('▲ Ingresos Mes: ${currency.format(income)}',
+                                style: TextStyle(
+                                    color: Colors.green.shade800, fontWeight: FontWeight.bold)),
+                            Text('▼ Gastos Mes: ${currency.format(expense)}',
+                                style: TextStyle(
+                                    color: Colors.red.shade800, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
                       ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('Salud Financiera',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          Text('$healthScore / 100',
+                              style: const TextStyle(
+                                  fontSize: 24, fontWeight: FontWeight.bold, color: Colors.teal)),
+                          Text('Ahorro: ${savingsRate.toStringAsFixed(1)}%',
+                              style: const TextStyle(fontSize: 12)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text('Salud Financiera',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                      Text('$healthScore / 100',
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.bold, color: Colors.teal)),
-                      Text('Ahorro: ${savingsRate.toStringAsFixed(1)}%',
-                          style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
+                const Divider(height: 28),
+                // Desglose por tipo de saldo (Bancos vs Billetera Digital vs Efectivo)
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: [
+                    _BalancePill(
+                      icon: Icons.account_balance,
+                      label: 'Bancos y Ahorros',
+                      amount: currency.format(bankBalance),
+                    ),
+                    _BalancePill(
+                      icon: Icons.qr_code_2,
+                      label: 'Saldo Billetera Digital',
+                      amount: currency.format(digitalWalletBalance),
+                      highlight: true,
+                    ),
+                    _BalancePill(
+                      icon: Icons.payments_outlined,
+                      label: 'Efectivo Hogar',
+                      amount: currency.format(cashBalance),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
         const SizedBox(height: 20),
+
+        // Carrusel rápido de Cuentas y Billeteras Digitales
+        const Text('Tus Cuentas y Billeteras Digitales',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 92,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: accounts.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (ctx, i) {
+              final a = accounts[i];
+              final isWallet = a.type == 'Billetera Digital';
+              return Container(
+                width: 240,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isWallet
+                      ? Colors.teal.withOpacity(0.12)
+                      : Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: isWallet ? Colors.teal : Colors.grey.withOpacity(0.3),
+                      width: isWallet ? 1.5 : 1),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: isWallet ? Colors.teal : null,
+                      foregroundColor: isWallet ? Colors.white : null,
+                      child: Icon(getAccountTypeIcon(a.type)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(a.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          Text(a.type,
+                              style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          const SizedBox(height: 2),
+                          Text(currency.format(a.balance),
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 20),
+
+        // Presupuestos dinámicos
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('Presupuestos por Categoría de Gasto',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            TextButton.icon(
+              onPressed: () => ref.read(navIndexProvider.notifier).state = 1,
+              icon: const Icon(Icons.add_circle_outline, size: 18),
+              label: const Text('Editar Categorías'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...expenseCategories.map((c) {
+          final spent = allTx
+              .where((t) => t.type == 2 && t.categoryName == c.name)
+              .fold(0.0, (s, t) => s + t.amount);
+          final progress =
+              c.monthlyBudget > 0 ? (spent / c.monthlyBudget).clamp(0.0, 1.0) : 0.0;
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                      child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                  Text('${(progress * 100).toInt()}%',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: progress > 0.85 ? Colors.red : Colors.teal)),
+                ],
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: progress,
+                    minHeight: 7,
+                    borderRadius: BorderRadius.circular(4),
+                    color: progress > 0.85 ? Colors.red : null,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                      '${currency.format(spent)} gastados de ${currency.format(c.monthlyBudget)} presupuestados'),
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 20),
+
         const Text('Gastos por Integrante del Hogar',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
@@ -680,10 +900,11 @@ class DashboardView extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 20),
+
         TextField(
           onChanged: (v) => ref.read(searchQueryProvider.notifier).state = v,
           decoration: InputDecoration(
-            hintText: 'Buscar movimiento o categoría...',
+            hintText: 'Buscar por descripción, categoría o billetera...',
             prefixIcon: const Icon(Icons.search),
             isDense: true,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -692,22 +913,29 @@ class DashboardView extends ConsumerWidget {
         const SizedBox(height: 12),
         ...filteredTx.map((t) {
           final isInc = t.type == 1;
+          final isTransfer = t.type == 3;
+          final bgColor = isTransfer
+              ? Colors.blue.shade100
+              : (isInc ? Colors.green.shade100 : Colors.red.shade100);
+          final fgColor = isTransfer
+              ? Colors.blue.shade800
+              : (isInc ? Colors.green.shade800 : Colors.red.shade800);
+          final iconData = isTransfer
+              ? Icons.swap_horiz
+              : (isInc ? Icons.arrow_downward : Icons.arrow_upward);
+
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               leading: CircleAvatar(
-                backgroundColor: isInc ? Colors.green.shade100 : Colors.red.shade100,
-                child: Icon(isInc ? Icons.arrow_downward : Icons.arrow_upward,
-                    color: isInc ? Colors.green.shade800 : Colors.red.shade800),
+                backgroundColor: bgColor,
+                child: Icon(iconData, color: fgColor),
               ),
               title: Text(t.description, style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text('${t.categoryName} • ${t.accountName} • Por: ${t.memberName}'),
               trailing: Text(
-                '${isInc ? '+' : '-'}${currency.format(t.amount)}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: isInc ? Colors.green.shade700 : Colors.red.shade700,
-                ),
+                '${isTransfer ? '⇄ ' : (isInc ? '+' : '-')}${currency.format(t.amount)}',
+                style: TextStyle(fontWeight: FontWeight.bold, color: fgColor),
               ),
             ),
           );
@@ -717,17 +945,390 @@ class DashboardView extends ConsumerWidget {
   }
 }
 
+class _BalancePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String amount;
+  final bool highlight;
+
+  const _BalancePill({
+    required this.icon,
+    required this.label,
+    required this.amount,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: highlight
+            ? Colors.teal.shade800
+            : Theme.of(context).colorScheme.surface.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: highlight ? Colors.white : Colors.teal),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11, color: highlight ? Colors.teal.shade100 : Colors.grey)),
+              Text(amount,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: highlight ? Colors.white : null)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ============================================================================
-// PESTAÑA 2: ANALÍTICA & EXPORTACIÓN CONTABLE CSV (REQUIERE PRO)
+// PESTAÑA 2: PARAMETRIZACIÓN DE CUENTAS, BILLETERAS DIGITALES Y RUBROS
+// ============================================================================
+class CatalogsSettingsView extends ConsumerWidget {
+  const CatalogsSettingsView({super.key});
+
+  void _showAddAccountDialog(BuildContext context, WidgetRef ref, {String defaultType = 'Billetera Digital'}) {
+    final nameCtrl = TextEditingController();
+    final balanceCtrl = TextEditingController(text: '0');
+    String selectedType = defaultType;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Nueva Cuenta o Billetera Digital'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<String>(
+                  value: selectedType,
+                  decoration: const InputDecoration(
+                    labelText: 'Opción de Saldo / Tipo de Cuenta',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    'Billetera Digital',
+                    'Banco',
+                    'Efectivo',
+                    'Tarjeta de Crédito',
+                    'Ahorro',
+                    'Cooperativa'
+                  ]
+                      .map((t) => DropdownMenuItem(
+                            value: t,
+                            child: Row(
+                              children: [
+                                Icon(getAccountTypeIcon(t), size: 18, color: Colors.teal),
+                                const SizedBox(width: 8),
+                                Text(t),
+                              ],
+                            ),
+                          ))
+                      .toList(),
+                  onChanged: (v) => setState(() => selectedType = v!),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: selectedType == 'Billetera Digital'
+                        ? 'Nombre de la Billetera Digital'
+                        : 'Nombre de la Cuenta',
+                    hintText: selectedType == 'Billetera Digital'
+                        ? 'Ej. Saldo Payphone, Deuna, Peigo, PayPal...'
+                        : 'Ej. Banco Pichincha, Produbanco, Caja Chica...',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: balanceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Saldo Disponible Inicial (USD)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                final bal = double.tryParse(balanceCtrl.text) ?? 0.0;
+                final current = ref.read(accountsProvider);
+                ref.read(accountsProvider.notifier).state = [
+                  ...current,
+                  AccountModel(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: nameCtrl.text.trim(),
+                    type: selectedType,
+                    balance: bal,
+                  ),
+                ];
+                Navigator.pop(ctx);
+              },
+              child: const Text('Guardar Opción de Saldo'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddCategoryDialog(BuildContext context, WidgetRef ref, int defaultType) {
+    final nameCtrl = TextEditingController();
+    final budgetCtrl = TextEditingController(text: defaultType == 2 ? '200' : '0');
+    int selectedType = defaultType;
+
+    showDialog(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          title: const Text('Parametrizar Tipo de Ingreso / Gasto'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SegmentedButton<int>(
+                  segments: const [
+                    ButtonSegment(
+                        value: 2, label: Text('Rubro de Gasto'), icon: Icon(Icons.trending_down)),
+                    ButtonSegment(
+                        value: 1, label: Text('Rubro de Ingreso'), icon: Icon(Icons.trending_up)),
+                  ],
+                  selected: {selectedType},
+                  onSelectionChanged: (s) => setState(() => selectedType = s.first),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: selectedType == 2
+                        ? 'Nombre del Tipo de Gasto'
+                        : 'Nombre del Tipo de Ingreso',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                if (selectedType == 2) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: budgetCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Presupuesto Mensual Tope (USD)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
+            FilledButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isEmpty) return;
+                final budget =
+                    selectedType == 2 ? (double.tryParse(budgetCtrl.text) ?? 0.0) : 0.0;
+                final current = ref.read(categoriesProvider);
+                ref.read(categoriesProvider.notifier).state = [
+                  ...current,
+                  CategoryModel(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: nameCtrl.text.trim(),
+                    type: selectedType,
+                    monthlyBudget: budget,
+                  ),
+                ];
+                Navigator.pop(ctx);
+              },
+              child: const Text('Guardar Categoría'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(accountsProvider);
+    final categories = ref.watch(categoriesProvider);
+    final expenseCats = categories.where((c) => c.type == 2).toList();
+    final incomeCats = categories.where((c) => c.type == 1).toList();
+    final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        const Text('Parametrización de Cuentas, Billeteras Digitales y Rubros',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+        const Text(
+            'Administra tus opciones de saldo (Bancos, Billeteras Digitales, Efectivo) y las categorías de ingresos/gastos.',
+            style: TextStyle(color: Colors.grey)),
+        const SizedBox(height: 20),
+
+        // SECCIÓN 1: CUENTAS Y BILLETERAS DIGITALES
+        Wrap(
+          spacing: 12,
+          runSpacing: 10,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('1. Cuentas Bancarias y Billeteras Digitales',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.tonalIcon(
+                  onPressed: () =>
+                      _showAddAccountDialog(context, ref, defaultType: 'Billetera Digital'),
+                  icon: const Icon(Icons.qr_code_2),
+                  label: const Text('+ Billetera Digital'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _showAddAccountDialog(context, ref, defaultType: 'Banco'),
+                  icon: const Icon(Icons.account_balance),
+                  label: const Text('+ Cuenta Bancaria'),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...accounts.map((a) {
+          final isDigital = a.type == 'Billetera Digital';
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: isDigital ? Colors.teal : null,
+                foregroundColor: isDigital ? Colors.white : null,
+                child: Icon(getAccountTypeIcon(a.type)),
+              ),
+              title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('Opción de Saldo: ${a.type} • Disponible: ${currency.format(a.balance)}'),
+              trailing: IconButton(
+                tooltip: 'Eliminar cuenta',
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: accounts.length <= 1
+                    ? null
+                    : () {
+                        ref.read(accountsProvider.notifier).state =
+                            accounts.where((item) => item.id != a.id).toList();
+                      },
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 28),
+
+        // SECCIÓN 2: TIPOS DE GASTOS
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('2. Tipos de Gastos del Hogar',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _showAddCategoryDialog(context, ref, 2),
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo Tipo de Gasto'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...expenseCats.map((c) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.red.shade100,
+                  child: Icon(Icons.trending_down, color: Colors.red.shade800),
+                ),
+                title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle:
+                    Text('Presupuesto Mensual Tope: ${currency.format(c.monthlyBudget)}'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: expenseCats.length <= 1
+                      ? null
+                      : () {
+                          ref.read(categoriesProvider.notifier).state =
+                              categories.where((item) => item.id != c.id).toList();
+                        },
+                ),
+              ),
+            )),
+        const SizedBox(height: 28),
+
+        // SECCIÓN 3: TIPOS DE INGRESOS
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text('3. Tipos de Ingresos Familiares',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _showAddCategoryDialog(context, ref, 1),
+              icon: const Icon(Icons.add),
+              label: const Text('Nuevo Tipo de Ingreso'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...incomeCats.map((c) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.green.shade100,
+                  child: Icon(Icons.trending_up, color: Colors.green.shade800),
+                ),
+                title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Categoría de Ingreso Activa'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: incomeCats.length <= 1
+                      ? null
+                      : () {
+                          ref.read(categoriesProvider.notifier).state =
+                              categories.where((item) => item.id != c.id).toList();
+                        },
+                ),
+              ),
+            )),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// PESTAÑA 3: ANALÍTICA & EXPORTACIÓN CONTABLE CSV
 // ============================================================================
 class AnalyticsAndExportView extends ConsumerWidget {
   const AnalyticsAndExportView({super.key});
 
   String _generateCsv(List<TxItem> items) {
     final buffer = StringBuffer();
-    buffer.writeln('Fecha,Tipo,Categoria,Descripcion,Cuenta,Miembro,Monto_USD');
+    buffer.writeln('Fecha,Tipo,Categoria,Descripcion,Cuenta_Billetera,Miembro,Monto_USD');
     for (final t in items) {
-      final tipo = t.type == 1 ? 'INGRESO' : 'GASTO';
+      final tipo = t.type == 1 ? 'INGRESO' : (t.type == 3 ? 'TRANSFERENCIA' : 'GASTO');
       final fecha = DateFormat('yyyy-MM-dd').format(t.date);
       buffer.writeln(
           '$fecha,$tipo,${t.categoryName},${t.description},${t.accountName},${t.memberName},${t.amount.toStringAsFixed(2)}');
@@ -762,11 +1363,6 @@ class AnalyticsAndExportView extends ConsumerWidget {
               onPressed: () {
                 if (!sub.isPro) {
                   ref.read(navIndexProvider.notifier).state = 4;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text(
-                            'Activa Cash Pro con Payphone o Google Play / App Store para exportar a Excel.')),
-                  );
                   return;
                 }
                 final csv = _generateCsv(allTx);
@@ -799,14 +1395,15 @@ class AnalyticsAndExportView extends ConsumerWidget {
 }
 
 // ============================================================================
-// PESTAÑA 3: METAS DE AHORRO
+// PESTAÑA 4: METAS DE AHORRO Y PAGOS FIJOS
 // ============================================================================
-class SavingsGoalsView extends ConsumerWidget {
-  const SavingsGoalsView({super.key});
+class GoalsAndRecurringView extends ConsumerWidget {
+  const GoalsAndRecurringView({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final goals = ref.watch(savingsGoalsProvider);
+    final bills = ref.watch(recurringBillsProvider);
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     return ListView(
@@ -814,7 +1411,7 @@ class SavingsGoalsView extends ConsumerWidget {
       children: [
         const Text('Metas de Ahorro Familiar',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         ...goals.map((g) {
           final pct = (g.currentAmount / g.targetAmount).clamp(0.0, 1.0);
           return Card(
@@ -850,28 +1447,10 @@ class SavingsGoalsView extends ConsumerWidget {
             ),
           );
         }),
-      ],
-    );
-  }
-}
-
-// ============================================================================
-// PESTAÑA 4: PAGOS FIJOS Y SUSCRIPCIONES
-// ============================================================================
-class RecurringBillsView extends ConsumerWidget {
-  const RecurringBillsView({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final bills = ref.watch(recurringBillsProvider);
-    final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
-
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
+        const SizedBox(height: 24),
         const Text('Pagos Fijos Mensuales',
             style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         ...bills.map((b) => Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
@@ -898,221 +1477,10 @@ class RecurringBillsView extends ConsumerWidget {
 }
 
 // ============================================================================
-// PESTAÑA 5: CENTRO DE MONETIZACIÓN (PAYPHONE WEB + REVENUECAT GOOGLE PLAY / APP STORE)
+// PESTAÑA 5: PASARELAS DE PAGO (PAYPHONE WEB + REVENUECAT MOBILE)
 // ============================================================================
 class MonetizationGatewaysView extends ConsumerWidget {
   const MonetizationGatewaysView({super.key});
-
-  void _openPayphoneCheckoutModal(BuildContext context, WidgetRef ref, bool isAnnual) {
-    final amountUsd = isAnnual ? 39.99 : 4.99;
-    final totalCents = isAnnual ? 3999 : 499;
-    final baseCents = (totalCents / 1.15).round();
-    final taxCents = totalCents - baseCents;
-    final clientTxId = 'CASH-${DateTime.now().millisecondsSinceEpoch}';
-
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.deepOrange.shade600,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.payment, color: Colors.white),
-                        ),
-                        const SizedBox(width: 10),
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Payphone Cajita de Pagos',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                            Text('Visa • Mastercard • Diners • Saldo Payphone',
-                                style: TextStyle(fontSize: 11, color: Colors.grey)),
-                          ],
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                const Divider(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          isAnnual
-                              ? 'Plan Anual Cash Pro Familiar'
-                              : 'Plan Mensual Cash Pro Familiar',
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 6),
-                      Text('clientTransactionId: $clientTxId',
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-                      Text(
-                          'Payload Payphone (Centavos): amount=$totalCents | base=$baseCents | tax(15%)=$taxCents',
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const TextField(
-                  decoration: InputDecoration(
-                    labelText: 'Número de Tarjeta o Teléfono Payphone',
-                    hintText: '4532 •••• •••• 8891  o  0991234567',
-                    prefixIcon: Icon(Icons.credit_card),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          labelText: 'Exp (MM/AA)',
-                          hintText: '08/29',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: 'CVC',
-                          hintText: '•••',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 18),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: Colors.deepOrange.shade600),
-                  onPressed: () {
-                    final authCode = 'PP-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
-                    ref.read(subscriptionProvider.notifier).state = ActiveSubscriptionInfo(
-                      isPro: true,
-                      planName: isAnnual ? 'Cash Pro Anual (\$39.99)' : 'Cash Pro Mensual (\$4.99)',
-                      gateway: 'Payphone Web (Confirm V2)',
-                      lastAuthCode: authCode,
-                      selectedBillingCycle: isAnnual ? 'annual' : 'monthly',
-                    );
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            '✓ Pago confirmado en /api/button/V2/Confirm (Código $authCode). ¡Cash Pro Activado!'),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.lock_outline),
-                  label: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Pagar \$${amountUsd.toStringAsFixed(2)} USD y Confirmar V2'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openRevenueCatStoreSheet(BuildContext context, WidgetRef ref, bool isAnnual) {
-    final amountUsd = isAnnual ? 39.99 : 4.99;
-    final sku = isAnnual ? BillingConfig.annualOfferingId : BillingConfig.monthlyOfferingId;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.shop_two, color: Colors.teal, size: 28),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Google Play Billing / Apple StoreKit 2',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('Gestionado vía RevenueCat SDK • Entitlement: ${BillingConfig.entitlementId}',
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(isAnnual ? 'Suscripción Anual Cash Pro' : 'Suscripción Mensual Cash Pro',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Product ID: $sku\nRenovación automática cancelable en cualquier momento.'),
-              trailing: Text('\$${amountUsd.toStringAsFixed(2)}',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            ),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () {
-                final rcTx = 'RC-GPA.${DateTime.now().millisecondsSinceEpoch}';
-                ref.read(subscriptionProvider.notifier).state = ActiveSubscriptionInfo(
-                  isPro: true,
-                  planName: isAnnual ? 'Cash Pro Anual (\$39.99)' : 'Cash Pro Mensual (\$4.99)',
-                  gateway: 'RevenueCat (Google Play / App Store)',
-                  lastAuthCode: rcTx,
-                  selectedBillingCycle: isAnnual ? 'annual' : 'monthly',
-                );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content: Text(
-                          '✓ Entitlement "${BillingConfig.entitlementId}" activo vía RevenueCat ($rcTx).')),
-                );
-              },
-              icon: const Icon(Icons.fingerprint),
-              label: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: Text('Suscribirse con 1-Toque (Play Store / App Store)'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1123,277 +1491,97 @@ class MonetizationGatewaysView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        const Text('Pasarelas de Pago y Suscripciones',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        const Text(
-            'Payphone (Cajita de Pagos V2) para Web  •  RevenueCat para Google Play y Apple App Store',
-            style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 16),
-
-        // Selector de canal para previsualizar ambos flujos desde cualquier dispositivo
+        const Text('Pasarelas de Monetización: Payphone & RevenueCat',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 14),
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(
               value: 'WEB_PAYPHONE',
               icon: Icon(Icons.language),
-              label: Text('Canal Web: Payphone Ecuador'),
+              label: Text('Canal Web: Payphone V2'),
             ),
             ButtonSegment(
               value: 'MOBILE_REVENUECAT',
               icon: Icon(Icons.phone_iphone),
-              label: Text('Canal Móvil: RevenueCat (Play/App Store)'),
+              label: Text('Canal Móvil: RevenueCat'),
             ),
           ],
           selected: {previewMode},
           onSelectionChanged: (s) => ref.read(gatewayPreviewModeProvider.notifier).state = s.first,
         ),
         const SizedBox(height: 20),
-
-        // Estado actual de la suscripción
         Card(
-          elevation: 0,
-          color: sub.isPro
-              ? Colors.teal.withOpacity(0.12)
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: BorderSide(color: sub.isPro ? Colors.teal : Colors.grey.shade400),
-          ),
           child: ListTile(
-            leading: Icon(
-              sub.isPro ? Icons.verified : Icons.info_outline,
-              color: sub.isPro ? Colors.teal : Colors.grey,
-              size: 34,
-            ),
+            leading: Icon(sub.isPro ? Icons.verified : Icons.lock_outline,
+                color: sub.isPro ? Colors.teal : Colors.grey, size: 32),
             title: Text(sub.planName, style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(
-                'Pasarela: ${sub.gateway}  •  Ref/Auth: ${sub.lastAuthCode}'),
-            trailing: sub.isPro
-                ? OutlinedButton(
-                    onPressed: () {
-                      ref.read(subscriptionProvider.notifier).state = sub.copyWith(
-                        isPro: false,
-                        planName: 'Plan Hogar Básico (Gratis)',
-                        gateway: 'Ninguna',
-                        lastAuthCode: '-',
-                      );
-                    },
-                    child: const Text('Cancelar Prueba'),
-                  )
-                : null,
-          ),
-        ),
-        const SizedBox(height: 20),
-
-        // Selector de Ciclo de Facturación (Mensual vs Anual con 33% de descuento)
-        Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () => ref.read(subscriptionProvider.notifier).state =
-                    sub.copyWith(selectedBillingCycle: 'monthly'),
-                child: Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: !isAnnual ? Colors.teal : Colors.grey.shade300,
-                      width: !isAnnual ? 2.5 : 1,
-                    ),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Plan Mensual', style: TextStyle(fontWeight: FontWeight.bold)),
-                        SizedBox(height: 6),
-                        Text('\$4.99 / mes',
-                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                        Text('Facturado mensualmente (499 centavos)',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => ref.read(subscriptionProvider.notifier).state =
-                    sub.copyWith(selectedBillingCycle: 'annual'),
-                child: Card(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(
-                      color: isAnnual ? Colors.teal : Colors.grey.shade300,
-                      width: isAnnual ? 2.5 : 1,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Plan Anual',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.shade700,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text('AHORRA 33%',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        const Text('\$39.99 / año',
-                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                        const Text('Equivale a \$3.33/mes (3999 centavos)',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-
-        // Tarjeta específica según el canal activo (Payphone Web vs RevenueCat Mobile)
-        if (previewMode == 'WEB_PAYPHONE')
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.credit_card, color: Colors.deepOrange.shade600, size: 30),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Checkout Web con Payphone Business',
-                                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                            Text(
-                                'Acepta Visa, Mastercard, Diners, Discover y Saldo Payphone • Confirmación automática V2',
-                                style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                      '• Paso 1: Llama a POST /api/billing/payphone/prepare para generar el clientTransactionId.\n'
-                      '• Paso 2: Abre la Cajita de Pagos y procesa el cobro 3DS.\n'
-                      '• Paso 3: Confirma en POST https://pay.payphonetodoesposible.com/api/button/V2/Confirm antes de 5 minutos.',
-                      style: TextStyle(fontSize: 13, height: 1.5)),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: Colors.deepOrange.shade600),
-                    onPressed: () => _openPayphoneCheckoutModal(context, ref, isAnnual),
-                    icon: const Icon(Icons.launch),
-                    label: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                          'Pagar con Payphone (${isAnnual ? "\$39.99 USD / Año" : "\$4.99 USD / Mes"})'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          Card(
-            elevation: 2,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.phone_android, color: Colors.teal, size: 30),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Suscripción Móvil con RevenueCat (In-App Purchases)',
-                                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-                            Text(
-                                'Google Play Billing (Android) & Apple StoreKit 2 (iOS) sincronizados por Webhook',
-                                style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                      '• Configura PurchasesConfiguration con tus llaves goog_ y appl_.\n'
-                      '• Desbloquea el Entitlement "cash_pro" y envía un Webhook a POST /api/billing/revenuecat/webhook.\n'
-                      '• Incluye el botón obligatorio de "Restaurar Compras" exigido por Apple y Google.',
-                      style: TextStyle(fontSize: 13, height: 1.5)),
-                  const SizedBox(height: 20),
-                  FilledButton.icon(
-                    onPressed: () => _openRevenueCatStoreSheet(context, ref, isAnnual),
-                    icon: const Icon(Icons.workspace_premium),
-                    label: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      child: Text(
-                          'Suscribirse vía Google Play / App Store (${isAnnual ? "\$39.99" : "\$4.99"})'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextButton.icon(
-                    onPressed: () {
-                      ref.read(subscriptionProvider.notifier).state = ActiveSubscriptionInfo(
-                        isPro: true,
-                        planName: 'Cash Pro Restaurado',
-                        gateway: 'RevenueCat RestorePurchases()',
-                        lastAuthCode: 'RC-RESTORED-OK',
-                        selectedBillingCycle: isAnnual ? 'annual' : 'monthly',
-                      );
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text(
-                                '✓ Compras restauradas exitosamente desde Google Play / App Store.')),
-                      );
-                    },
-                    icon: const Icon(Icons.restore),
-                    label: const Text('Restaurar Compras Anteriores (Restore Purchases)'),
-                  ),
-                ],
+            subtitle: Text('Pasarela: ${sub.gateway} • Auth: ${sub.lastAuthCode}'),
+            trailing: Switch(
+              value: sub.isPro,
+              onChanged: (v) => ref.read(subscriptionProvider.notifier).state = sub.copyWith(
+                isPro: v,
+                planName: v ? 'Cash Pro Activo' : 'Plan Hogar Básico (Gratis)',
               ),
             ),
           ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  previewMode == 'WEB_PAYPHONE'
+                      ? 'Checkout Web con Payphone Business (Confirmación V2)'
+                      : 'Suscripción Nativa con RevenueCat (Google Play / App Store)',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  previewMode == 'WEB_PAYPHONE'
+                      ? 'Acepta tarjetas Visa, Mastercard, Diners y Saldo de Billetera Payphone confirmando en /api/button/V2/Confirm.'
+                      : 'Desbloquea el Entitlement "${BillingConfig.entitlementId}" sincronizado vía Webhook con PostgreSQL.',
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () {
+                    ref.read(subscriptionProvider.notifier).state = ActiveSubscriptionInfo(
+                      isPro: true,
+                      planName: isAnnual ? 'Cash Pro Anual (\$39.99)' : 'Cash Pro Mensual (\$4.99)',
+                      gateway: previewMode == 'WEB_PAYPHONE'
+                          ? 'Payphone Web V2'
+                          : 'RevenueCat In-App Purchase',
+                      lastAuthCode:
+                          'AUTH-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}',
+                    );
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('✓ Suscripción Cash Pro activada.')),
+                    );
+                  },
+                  icon: const Icon(Icons.payment),
+                  label: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('Probar Cobro y Activar Cash Pro'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
 }
 
 // ============================================================================
-// MODAL DE REGISTRO DE MOVIMIENTOS
+// MODAL DE REGISTRO: GASTO (2) | INGRESO (1) | RECARGAR BILLETERA / TRANSFERIR (3)
 // ============================================================================
 class NewTxModal extends ConsumerStatefulWidget {
-  const NewTxModal({super.key});
+  final int initialType;
+  const NewTxModal({super.key, this.initialType = 2});
   @override
   ConsumerState<NewTxModal> createState() => _NewTxModalState();
 }
@@ -1401,23 +1589,40 @@ class NewTxModal extends ConsumerStatefulWidget {
 class _NewTxModalState extends ConsumerState<NewTxModal> {
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  int _type = 2;
-  String _category = 'Supermercado y Alimentación';
-  String _accountName = 'Cuenta Bancaria Principal';
+  late int _type;
+  String? _selectedCategory;
+  String? _selectedAccount;
+  String? _destinationAccount;
+
+  @override
+  void initState() {
+    super.initState();
+    _type = widget.initialType;
+  }
 
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authSessionProvider);
     final accounts = ref.watch(accountsProvider);
-    final categories = _type == 2
-        ? [
-            'Supermercado y Alimentación',
-            'Servicios Básicos (Luz/Agua/Net)',
-            'Educación y Hogar',
-            'Salud y Bienestar'
-          ]
-        : ['Ingresos / Salario'];
-    if (!categories.contains(_category)) _category = categories.first;
+    final allCategories = ref.watch(categoriesProvider);
+    final filteredCategories =
+        allCategories.where((c) => c.type == (_type == 1 ? 1 : 2)).toList();
+
+    if (_selectedAccount == null || !accounts.any((a) => a.name == _selectedAccount)) {
+      _selectedAccount = accounts.first.name;
+    }
+    if (_destinationAccount == null ||
+        !accounts.any((a) => a.name == _destinationAccount) ||
+        _destinationAccount == _selectedAccount) {
+      final wallet = accounts.where((a) => a.type == 'Billetera Digital').firstOrNull;
+      _destinationAccount = (wallet != null && wallet.name != _selectedAccount)
+          ? wallet.name
+          : (accounts.length > 1 ? accounts[1].name : accounts.first.name);
+    }
+    if (_selectedCategory == null ||
+        !filteredCategories.any((c) => c.name == _selectedCategory)) {
+      _selectedCategory = filteredCategories.first.name;
+    }
 
     return Padding(
       padding: EdgeInsets.only(
@@ -1430,8 +1635,10 @@ class _NewTxModalState extends ConsumerState<NewTxModal> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text('Registrar Movimiento',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(
+            _type == 3 ? 'Recargar Billetera Digital / Transferir' : 'Registrar Movimiento',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 12),
           SegmentedButton<int>(
             segments: const [
@@ -1439,6 +1646,8 @@ class _NewTxModalState extends ConsumerState<NewTxModal> {
                   value: 2, label: Text('Gasto'), icon: Icon(Icons.remove_circle_outline)),
               ButtonSegment(
                   value: 1, label: Text('Ingreso'), icon: Icon(Icons.add_circle_outline)),
+              ButtonSegment(
+                  value: 3, label: Text('Recargar / Transf.'), icon: Icon(Icons.swap_horiz)),
             ],
             selected: {_type},
             onSelectionChanged: (v) => setState(() => _type = v.first),
@@ -1453,58 +1662,122 @@ class _NewTxModalState extends ConsumerState<NewTxModal> {
           const SizedBox(height: 12),
           TextField(
             controller: _descCtrl,
-            decoration:
-                const InputDecoration(labelText: 'Descripción', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+              labelText: _type == 3
+                  ? 'Concepto (Ej. Recarga a Billetera Digital)'
+                  : 'Descripción',
+              border: const OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _accountName,
-            decoration:
-                const InputDecoration(labelText: 'Cuenta', border: OutlineInputBorder()),
+            value: _selectedAccount,
+            decoration: InputDecoration(
+              labelText: _type == 3
+                  ? 'Cuenta Origen (De donde sale el saldo)'
+                  : 'Opción de Saldo / Cuenta',
+              border: const OutlineInputBorder(),
+            ),
             items: accounts
-                .map((a) => DropdownMenuItem(value: a.name, child: Text(a.name)))
+                .map((a) => DropdownMenuItem(
+                      value: a.name,
+                      child: Text('${a.name} (${a.type})'),
+                    ))
                 .toList(),
-            onChanged: (v) => setState(() => _accountName = v!),
+            onChanged: (v) => setState(() => _selectedAccount = v),
           ),
           const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _category,
-            decoration:
-                const InputDecoration(labelText: 'Categoría', border: OutlineInputBorder()),
-            items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-            onChanged: (v) => setState(() => _category = v!),
-          ),
+          if (_type == 3)
+            DropdownButtonFormField<String>(
+              value: _destinationAccount,
+              decoration: const InputDecoration(
+                labelText: 'Billetera o Cuenta Destino (A donde llega el saldo)',
+                border: OutlineInputBorder(),
+              ),
+              items: accounts
+                  .map((a) => DropdownMenuItem(
+                        value: a.name,
+                        child: Text('${a.name} (${a.type})'),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _destinationAccount = v),
+            )
+          else
+            DropdownButtonFormField<String>(
+              value: _selectedCategory,
+              decoration: InputDecoration(
+                labelText: _type == 2 ? 'Categoría de Gasto' : 'Categoría de Ingreso',
+                border: const OutlineInputBorder(),
+              ),
+              items: filteredCategories
+                  .map((c) => DropdownMenuItem(value: c.name, child: Text(c.name)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedCategory = v),
+            ),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () {
               final amt = double.tryParse(_amountCtrl.text) ?? 0;
-              if (amt <= 0) return;
+              if (amt <= 0 || _selectedAccount == null) return;
 
               final list = ref.read(transactionsListProvider);
-              ref.read(transactionsListProvider.notifier).state = [
-                TxItem(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  description: _descCtrl.text.isEmpty ? 'Movimiento' : _descCtrl.text,
-                  amount: amt,
-                  type: _type,
-                  categoryName: _category,
-                  accountName: _accountName,
-                  memberName: session?.fullName ?? 'Hogar',
-                ),
-                ...list,
-              ];
 
-              ref.read(accountsProvider.notifier).state = accounts.map((acc) {
-                if (acc.name == _accountName) {
-                  final delta = _type == 1 ? amt : -amt;
-                  return acc.copyWith(balance: acc.balance + delta);
+              if (_type == 3) {
+                if (_destinationAccount == null || _destinationAccount == _selectedAccount) {
+                  return;
                 }
-                return acc;
-              }).toList();
+                // Registrar transferencia sin afectar gastos del mes
+                ref.read(transactionsListProvider.notifier).state = [
+                  TxItem(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    description: _descCtrl.text.isEmpty
+                        ? 'Recarga / Transferencia de Saldo'
+                        : _descCtrl.text,
+                    amount: amt,
+                    type: 3,
+                    categoryName: 'Transferencia / Recarga',
+                    accountName: '$_selectedAccount → $_destinationAccount',
+                    memberName: session?.fullName ?? 'Hogar',
+                  ),
+                  ...list,
+                ];
+
+                // Descontar de origen y sumar a la Billetera Digital / destino
+                ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                  if (acc.name == _selectedAccount) {
+                    return acc.copyWith(balance: acc.balance - amt);
+                  }
+                  if (acc.name == _destinationAccount) {
+                    return acc.copyWith(balance: acc.balance + amt);
+                  }
+                  return acc;
+                }).toList();
+              } else {
+                ref.read(transactionsListProvider.notifier).state = [
+                  TxItem(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    description: _descCtrl.text.isEmpty ? 'Movimiento' : _descCtrl.text,
+                    amount: amt,
+                    type: _type,
+                    categoryName: _selectedCategory!,
+                    accountName: _selectedAccount!,
+                    memberName: session?.fullName ?? 'Hogar',
+                  ),
+                  ...list,
+                ];
+
+                ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                  if (acc.name == _selectedAccount) {
+                    final delta = _type == 1 ? amt : -amt;
+                    return acc.copyWith(balance: acc.balance + delta);
+                  }
+                  return acc;
+                }).toList();
+              }
 
               Navigator.pop(context);
             },
-            child: const Text('Guardar Movimiento'),
+            child: Text(_type == 3 ? 'Ejecutar Recarga / Transferencia' : 'Guardar Movimiento'),
           ),
         ],
       ),
