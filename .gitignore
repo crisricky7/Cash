@@ -1,0 +1,7 @@
+bin/
+obj/
+.vs/
+*.user
+.dart_tool/
+build/
+pubspec.lock
