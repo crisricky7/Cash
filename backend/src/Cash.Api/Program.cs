@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using Cash.Api;
 using Cash.Application;
 using Cash.Application.Features.Auth.Commands;
 using Cash.Application.Features.Catalogs.Queries;
@@ -7,6 +8,7 @@ using Cash.Application.Features.Dashboard.Queries;
 using Cash.Application.Features.Transactions.Commands;
 using Cash.Domain.Enums;
 using Cash.Infrastructure;
+using Cash.Infrastructure.Payments;
 using Cash.Infrastructure.Persistence;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -16,6 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpClient<PayphoneGatewayService>();
 builder.Services.AddCors(opt => opt.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "CashSuperSecretKeyForHouseholdApp2026!@#";
@@ -70,6 +73,10 @@ protectedApi.MapPost("/transactions", async (CreateTransactionRequest req, Claim
     var id = await sender.Send(new CreateTransactionCommand(req.AccountId, req.CategoryId, req.Amount, req.Type, req.Description, userId, fullName));
     return Results.Created($"/api/transactions/{id}", new { id });
 });
+
+// Endpoints de Exportación CSV y Pasarelas de Pago (Payphone + RevenueCat)
+app.MapExportEndpoints();
+app.MapBillingEndpoints();
 
 app.Run();
 
