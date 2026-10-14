@@ -28,11 +28,7 @@ public static class FamilyAndStoriesEndpoints
         {
             var role = user.FindFirstValue(ClaimTypes.Role) ?? "";
             if (!string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase))
-            {
-                return Results.Problem(
-                    "Acceso denegado: Solo el Administrador/Desarrollador de Cash puede publicar historias diarias.",
-                    statusCode: 403);
-            }
+                return Results.Problem("Solo el Administrador/Desarrollador puede publicar historias.", statusCode: 403);
 
             var story = new StoryTip
             {
@@ -55,12 +51,7 @@ public static class FamilyAndStoriesEndpoints
             };
 
             if (req.CurrentActiveMembers >= maxAllowed)
-            {
-                return Results.BadRequest(new
-                {
-                    message = $"Has alcanzado el límite de {maxAllowed} usuario(s) de tu plan actual ({req.SubscriptionTier})."
-                });
-            }
+                return Results.BadRequest(new { message = $"Límite de {maxAllowed} usuario(s) alcanzado." });
 
             var invitation = new HouseholdInvitation
             {
@@ -70,34 +61,16 @@ public static class FamilyAndStoriesEndpoints
             };
             _invitations.Add(invitation);
 
-            return Results.Ok(new
-            {
-                invitation.Id,
-                invitation.InvitedName,
-                invitation.InvitedEmail,
-                invitation.InvitationToken,
-                invitation.Status,
-                acceptUrl = $"https://crisricky7.github.io/Cash/?acceptInvite={invitation.InvitationToken}",
-                message = $"Invitación enviada por correo a {invitation.InvitedEmail}."
-            });
+            return Results.Ok(invitation);
         });
 
         api.MapPost("/family/invitations/{token}/accept", (string token) =>
         {
             var inv = _invitations.FirstOrDefault(i => i.InvitationToken == token);
-            if (inv is null) return Results.NotFound(new { message = "Invitación no encontrada." });
-
+            if (inv is null) return Results.NotFound();
             inv.Status = "Accepted";
             inv.AcceptedAt = DateTime.UtcNow;
-
-            return Results.Ok(new
-            {
-                inv.InvitedName,
-                inv.InvitedEmail,
-                inv.Status,
-                familyModeActivated = true,
-                message = $"{inv.InvitedName} se ha unido a la familia automáticamente."
-            });
+            return Results.Ok(inv);
         });
     }
 }

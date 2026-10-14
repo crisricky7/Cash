@@ -16,14 +16,10 @@ public static class CsvExportEndpoint
             foreach (var t in txList)
             {
                 var tipo = t.Type == Cash.Domain.Enums.TransactionType.Income ? "INGRESO" : "GASTO";
-                var desc = t.Description.Replace(",", " ");
-                var cat = (t.Category?.Name ?? "General").Replace(",", " ");
-                var acc = (t.Account?.Name ?? "Cuenta").Replace(",", " ");
-                sb.AppendLine($"{t.Date:yyyy-MM-dd},{tipo},{cat},{desc},{acc},{t.MemberName},{t.Amount:F2}");
+                sb.AppendLine($"{t.Date:yyyy-MM-dd},{tipo},{t.Category?.Name},{t.Description},{t.Account?.Name},{t.MemberName},{t.Amount:F2}");
             }
 
-            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return Results.File(bytes, "text/csv", $"Cash_Reporte_{DateTime.UtcNow:yyyyMM}.csv");
+            return Results.File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", "Cash_Reporte.csv");
         }).RequireAuthorization();
     }
 }

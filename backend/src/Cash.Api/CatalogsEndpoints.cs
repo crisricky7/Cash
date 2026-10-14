@@ -26,9 +26,8 @@ public static class CatalogsEndpoints
 
         group.MapPost("/accounts/transfer", async (TransferBalanceRequest req, IUnitOfWork uow, CancellationToken ct) =>
         {
-            if (req.Amount <= 0) return Results.BadRequest(new { message = "El monto debe ser mayor a cero." });
-            if (req.SourceAccountId == req.DestinationAccountId)
-                return Results.BadRequest(new { message = "La cuenta origen y destino deben ser distintas." });
+            if (req.Amount <= 0 || req.SourceAccountId == req.DestinationAccountId)
+                return Results.BadRequest();
 
             var source = await uow.Accounts.GetByIdAsync(req.SourceAccountId, ct);
             var dest = await uow.Accounts.GetByIdAsync(req.DestinationAccountId, ct);
@@ -36,7 +35,6 @@ public static class CatalogsEndpoints
 
             source.Balance -= req.Amount;
             dest.Balance += req.Amount;
-
             uow.Accounts.Update(source);
             uow.Accounts.Update(dest);
 
@@ -46,8 +44,8 @@ public static class CatalogsEndpoints
                 CategoryId = Guid.Empty,
                 Amount = req.Amount,
                 Type = TransactionType.Transfer,
-                Description = $"Transferencia / Recarga: {source.Name} → {dest.Name}",
-                MemberName = string.IsNullOrWhiteSpace(req.MemberName) ? "Titular" : req.MemberName
+                Description = $"Transferencia: {source.Name} → {dest.Name}",
+                MemberName = req.MemberName
             }, ct);
 
             await uow.SaveChangesAsync(ct);

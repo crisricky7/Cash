@@ -14,6 +14,6 @@ public class Transaction
     public decimal Amount { get; set; }
     public TransactionType Type { get; set; }
     public string Description { get; set; } = string.Empty;
-    public string MemberName { get; set; } = "Hogar";
+    public string MemberName { get; set; } = "Titular";
     public DateTime Date { get; set; } = DateTime.UtcNow;
 }

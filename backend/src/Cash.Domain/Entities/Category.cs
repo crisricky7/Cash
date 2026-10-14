@@ -9,4 +9,5 @@ public class Category
     public string Icon { get; set; } = "category";
     public TransactionType Type { get; set; }
     public decimal MonthlyBudget { get; set; }
+    public string Bucket503020 { get; set; } = "Necesidades (50%)";
 }

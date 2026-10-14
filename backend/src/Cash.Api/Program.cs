@@ -78,6 +78,7 @@ app.MapExportEndpoints();
 app.MapBillingEndpoints();
 app.MapCatalogsCrudEndpoints();
 app.MapFamilyAndStoriesEndpoints();
+app.MapSmartFeaturesEndpoints();
 
 app.Run();
 

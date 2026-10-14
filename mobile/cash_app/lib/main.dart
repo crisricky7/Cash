@@ -24,7 +24,7 @@ Future<void> showAdaptiveSheetOrDialog({
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
+          constraints: const BoxConstraints(maxWidth: 500),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: child,
@@ -72,7 +72,7 @@ Future<void> showAdaptiveSheetOrDialog({
 }
 
 // ============================================================================
-// MODELOS DE DOMINIO: 3 PLANES (1, 4, 7 USUARIOS) CON MENSUAL Y ANUAL EN USD
+// MODELOS DE DOMINIO COMPLETOS
 // ============================================================================
 enum SubscriptionTier {
   personal(
@@ -151,31 +151,23 @@ class HouseholdMember {
   final String name;
   final String email;
   final bool isOwner;
-  final DateTime joinedAt;
-
   HouseholdMember({
     required this.id,
     required this.name,
     required this.email,
     this.isOwner = false,
-    DateTime? joinedAt,
-  }) : joinedAt = joinedAt ?? DateTime.now();
+  });
 }
 
 class EmailInvitation {
   final String id;
   final String invitedName;
   final String invitedEmail;
-  final String status;
-  final DateTime sentAt;
-
   EmailInvitation({
     required this.id,
     required this.invitedName,
     required this.invitedEmail,
-    this.status = 'Pendiente',
-    DateTime? sentAt,
-  }) : sentAt = sentAt ?? DateTime.now();
+  });
 }
 
 class FinancialStoryTip {
@@ -211,7 +203,7 @@ class FinancialStoryTip {
 class AccountModel {
   final String id;
   final String name;
-  final String type; // Banco, Billetera Digital, Efectivo, Tarjeta de Crédito
+  final String type; // Banco, Billetera Digital, Efectivo, Tarjeta de Crédito, Ahorro, Cooperativa
   final double balance;
   AccountModel({required this.id, required this.name, required this.type, required this.balance});
 
@@ -228,11 +220,13 @@ class CategoryModel {
   final String name;
   final int type; // 1 = Ingreso, 2 = Gasto
   final double monthlyBudget;
+  final String bucket503020; // Necesidades (50%) | Deseos / Estilo de Vida (30%) | Ahorro / Deudas (20%)
   CategoryModel({
     required this.id,
     required this.name,
     required this.type,
     required this.monthlyBudget,
+    this.bucket503020 = 'Necesidades (50%)',
   });
 }
 
@@ -240,7 +234,7 @@ class TxItem {
   final String id;
   final String description;
   final double amount;
-  final int type; // 1 = Ingreso, 2 = Gasto, 3 = Transferencia / Recarga
+  final int type; // 1 = Ingreso, 2 = Gasto, 3 = Transferencia / Recarga Billetera
   final String categoryName;
   final String accountName;
   final String memberName;
@@ -255,6 +249,65 @@ class TxItem {
     required this.memberName,
     DateTime? date,
   }) : date = date ?? DateTime.now();
+}
+
+class CreditInstallmentModel {
+  final String id;
+  final String cardName;
+  final String description;
+  final double totalAmount;
+  final int totalMonths;
+  final int paidMonths;
+  final int cutOffDay;
+  final int paymentDueDay;
+
+  CreditInstallmentModel({
+    required this.id,
+    required this.cardName,
+    required this.description,
+    required this.totalAmount,
+    required this.totalMonths,
+    required this.paidMonths,
+    this.cutOffDay = 14,
+    this.paymentDueDay = 2,
+  });
+
+  double get monthlyQuota => totalMonths > 0 ? totalAmount / totalMonths : 0.0;
+  double get remainingBalance => (totalMonths - paidMonths) * monthlyQuota;
+
+  CreditInstallmentModel copyWith({int? paidMonths}) => CreditInstallmentModel(
+        id: id,
+        cardName: cardName,
+        description: description,
+        totalAmount: totalAmount,
+        totalMonths: totalMonths,
+        paidMonths: paidMonths ?? this.paidMonths,
+        cutOffDay: cutOffDay,
+        paymentDueDay: paymentDueDay,
+      );
+}
+
+class SavingsGoalModel {
+  final String id;
+  final String title;
+  final double targetAmount;
+  final double currentAmount;
+  final String deadline;
+  SavingsGoalModel({
+    required this.id,
+    required this.title,
+    required this.targetAmount,
+    required this.currentAmount,
+    required this.deadline,
+  });
+
+  SavingsGoalModel copyWith({double? currentAmount}) => SavingsGoalModel(
+        id: id,
+        title: title,
+        targetAmount: targetAmount,
+        currentAmount: currentAmount ?? this.currentAmount,
+        deadline: deadline,
+      );
 }
 
 class RecurringBillModel {
@@ -330,7 +383,7 @@ class SmartInputParser {
       if (cash != null) selectedAccount = cash.name;
     }
 
-    String category = isIncome ? 'Ingresos' : 'Alimentación y Supermercado';
+    String category = isIncome ? 'Ingresos / Salario' : 'Supermercado y Alimentación';
     if (!isIncome) {
       if (lower.contains('taxi') ||
           lower.contains('uber') ||
@@ -341,17 +394,17 @@ class SmartInputParser {
           lower.contains('agua') ||
           lower.contains('internet') ||
           lower.contains('plan')) {
-        category = 'Vivienda y Servicios';
+        category = 'Servicios Básicos (Luz/Agua/Net)';
       } else if (lower.contains('farmacia') ||
           lower.contains('medico') ||
           lower.contains('salud') ||
           lower.contains('colegio')) {
-        category = 'Salud y Educación';
+        category = 'Educación y Salud';
       } else if (lower.contains('cafe') ||
           lower.contains('cine') ||
           lower.contains('salida') ||
           lower.contains('pizza')) {
-        category = 'Salidas y Gustos';
+        category = 'Restaurantes, Salidas y Ocio';
       }
     }
 
@@ -370,11 +423,14 @@ class SmartInputParser {
 }
 
 // ============================================================================
-// PROVIDERS GLOBALES
+// PROVIDERS GLOBALES (TODOS LOS MÓDULOS ACTIVOS)
 // ============================================================================
 final authSessionProvider = StateProvider<AuthSession?>((ref) => null);
 final isDarkModeProvider = StateProvider<bool>((ref) => false);
 final navIndexProvider = StateProvider<int>((ref) => 0);
+final copilotSubTabProvider = StateProvider<int>((ref) => 0); // 0: Diferidos, 1: Metas, 2: 50/30/20 & CSV
+final selectedMemberFilterProvider = StateProvider<String?>((ref) => null);
+final searchQueryProvider = StateProvider<String>((ref) => '');
 
 final subscriptionTierProvider =
     StateProvider<SubscriptionTier>((ref) => SubscriptionTier.personal);
@@ -393,7 +449,7 @@ final householdMembersProvider = StateProvider<List<HouseholdMember>>((ref) => [
 
 final pendingInvitationsProvider = StateProvider<List<EmailInvitation>>((ref) => []);
 
-// REGLA AUTOMÁTICA: 1 usuario = Modo Personal (false) | >1 usuarios = Modo Familiar (true)
+// REGLA AUTOMÁTICA: 1 persona = Modo Personal (false) | >1 personas = Modo Familiar (true)
 final isFamilyModeProvider = Provider<bool>((ref) {
   final members = ref.watch(householdMembersProvider);
   return members.length > 1;
@@ -440,47 +496,139 @@ final accountsProvider = StateProvider<List<AccountModel>>((ref) => [
           type: 'Billetera Digital',
           balance: 195.00),
       AccountModel(id: 'a3', name: 'Efectivo Disponible', type: 'Efectivo', balance: 140.00),
+      AccountModel(id: 'a4', name: 'Fondo de Reserva', type: 'Ahorro', balance: 3200.00),
     ]);
 
 final categoriesProvider = StateProvider<List<CategoryModel>>((ref) => [
-      CategoryModel(id: 'c1', name: 'Alimentación y Supermercado', type: 2, monthlyBudget: 600.00),
-      CategoryModel(id: 'c2', name: 'Vivienda y Servicios', type: 2, monthlyBudget: 250.00),
-      CategoryModel(id: 'c3', name: 'Salud y Educación', type: 2, monthlyBudget: 300.00),
-      CategoryModel(id: 'c4', name: 'Transporte y Movilidad', type: 2, monthlyBudget: 150.00),
-      CategoryModel(id: 'c5', name: 'Salidas y Gustos', type: 2, monthlyBudget: 150.00),
-      CategoryModel(id: 'c6', name: 'Ingresos', type: 1, monthlyBudget: 0.00),
+      CategoryModel(
+        id: 'c1',
+        name: 'Supermercado y Alimentación',
+        type: 2,
+        monthlyBudget: 600.00,
+        bucket503020: 'Necesidades (50%)',
+      ),
+      CategoryModel(
+        id: 'c2',
+        name: 'Servicios Básicos (Luz/Agua/Net)',
+        type: 2,
+        monthlyBudget: 180.00,
+        bucket503020: 'Necesidades (50%)',
+      ),
+      CategoryModel(
+        id: 'c3',
+        name: 'Educación y Salud',
+        type: 2,
+        monthlyBudget: 350.00,
+        bucket503020: 'Necesidades (50%)',
+      ),
+      CategoryModel(
+        id: 'c4',
+        name: 'Transporte y Movilidad',
+        type: 2,
+        monthlyBudget: 150.00,
+        bucket503020: 'Necesidades (50%)',
+      ),
+      CategoryModel(
+        id: 'c5',
+        name: 'Restaurantes, Salidas y Ocio',
+        type: 2,
+        monthlyBudget: 180.00,
+        bucket503020: 'Deseos / Estilo de Vida (30%)',
+      ),
+      CategoryModel(
+        id: 'c6',
+        name: 'Ingresos / Salario',
+        type: 1,
+        monthlyBudget: 0.00,
+      ),
+      CategoryModel(
+        id: 'c7',
+        name: 'Honorarios / Ingresos Extra',
+        type: 1,
+        monthlyBudget: 0.00,
+      ),
     ]);
 
 final transactionsListProvider = StateProvider<List<TxItem>>((ref) => [
       TxItem(
         id: 't1',
         description: 'Compra Quincenal Supermercado',
-        amount: 145.00,
+        amount: 165.00,
         type: 2,
-        categoryName: 'Alimentación y Supermercado',
+        categoryName: 'Supermercado y Alimentación',
         accountName: 'Cuenta Bancaria Principal',
         memberName: 'Titular de Cuenta',
         date: DateTime.now().subtract(const Duration(hours: 5)),
       ),
       TxItem(
         id: 't2',
-        description: 'Café y Panadería QR',
-        amount: 6.50,
+        description: 'Café y Panadería QR (Gasto Hormiga)',
+        amount: 8.50,
         type: 2,
-        categoryName: 'Salidas y Gustos',
+        categoryName: 'Restaurantes, Salidas y Ocio',
         accountName: 'Billetera Digital (Payphone / Deuna)',
         memberName: 'Titular de Cuenta',
         date: DateTime.now().subtract(const Duration(days: 1)),
       ),
       TxItem(
         id: 't3',
-        description: 'Ingreso Mensual',
-        amount: 2400.00,
+        description: 'Recarga de Saldo a Billetera Digital',
+        amount: 100.00,
+        type: 3,
+        categoryName: 'Transferencia / Recarga',
+        accountName: 'Cuenta Bancaria Principal → Billetera Digital',
+        memberName: 'Titular de Cuenta',
+        date: DateTime.now().subtract(const Duration(days: 2)),
+      ),
+      TxItem(
+        id: 't4',
+        description: 'Ingreso Salario Mensual',
+        amount: 2800.00,
         type: 1,
-        categoryName: 'Ingresos',
+        categoryName: 'Ingresos / Salario',
         accountName: 'Cuenta Bancaria Principal',
         memberName: 'Titular de Cuenta',
         date: DateTime.now().subtract(const Duration(days: 4)),
+      ),
+    ]);
+
+final installmentsProvider = StateProvider<List<CreditInstallmentModel>>((ref) => [
+      CreditInstallmentModel(
+        id: 'i1',
+        cardName: 'Visa Titanium',
+        description: 'Refrigeradora Inverter (Diferido Sin Intereses)',
+        totalAmount: 1200.00,
+        totalMonths: 12,
+        paidMonths: 5,
+        cutOffDay: 14,
+        paymentDueDay: 2,
+      ),
+      CreditInstallmentModel(
+        id: 'i2',
+        cardName: 'Mastercard Black',
+        description: 'Matrícula y Equipamiento Escolar Anual',
+        totalAmount: 600.00,
+        totalMonths: 6,
+        paidMonths: 3,
+        cutOffDay: 20,
+        paymentDueDay: 8,
+      ),
+    ]);
+
+final savingsGoalsProvider = StateProvider<List<SavingsGoalModel>>((ref) => [
+      SavingsGoalModel(
+        id: 'g1',
+        title: 'Fondo de Emergencia (6 Meses)',
+        targetAmount: 5000.00,
+        currentAmount: 3200.00,
+        deadline: 'Dic 2026',
+      ),
+      SavingsGoalModel(
+        id: 'g2',
+        title: 'Vacaciones Fin de Año',
+        targetAmount: 1800.00,
+        currentAmount: 950.00,
+        deadline: 'Nov 2026',
       ),
     ]);
 
@@ -488,15 +636,23 @@ final recurringBillsProvider = StateProvider<List<RecurringBillModel>>((ref) => 
       RecurringBillModel(
         id: 'r1',
         title: 'Internet Fibra Óptica',
-        category: 'Vivienda y Servicios',
+        category: 'Servicios Básicos (Luz/Agua/Net)',
         amount: 45.00,
         dueDay: 5,
         isPaid: true,
       ),
       RecurringBillModel(
         id: 'r2',
+        title: 'Mensualidad / Educación',
+        category: 'Educación y Salud',
+        amount: 220.00,
+        dueDay: 10,
+        isPaid: false,
+      ),
+      RecurringBillModel(
+        id: 'r3',
         title: 'Luz y Agua Potable',
-        category: 'Vivienda y Servicios',
+        category: 'Servicios Básicos (Luz/Agua/Net)',
         amount: 55.00,
         dueDay: 18,
         isPaid: false,
@@ -511,6 +667,8 @@ IconData getAccountTypeIcon(String type) {
       return Icons.payments_outlined;
     case 'Tarjeta de Crédito':
       return Icons.credit_card;
+    case 'Ahorro':
+      return Icons.savings_outlined;
     default:
       return Icons.account_balance;
   }
@@ -1088,7 +1246,7 @@ class CashApp extends ConsumerWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
-      home: session == null ? const LoginScreen() : const CleanHomeShell(),
+      home: session == null ? const LoginScreen() : const CompleteHomeShell(),
     );
   }
 }
@@ -1160,7 +1318,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 22),
 
-                  // INGRESO BIOMÉTRICO CON HUELLA DIGITAL
                   Card(
                     elevation: 0,
                     color: Theme.of(context).colorScheme.primaryContainer,
@@ -1303,10 +1460,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 // ============================================================================
-// SHELL PRINCIPAL
+// SHELL PRINCIPAL DE 4 PESTAÑAS CON EL 100% DE LAS FUNCIONALIDADES
 // ============================================================================
-class CleanHomeShell extends ConsumerWidget {
-  const CleanHomeShell({super.key});
+class CompleteHomeShell extends ConsumerWidget {
+  const CompleteHomeShell({super.key});
 
   void _openStoryViewer(BuildContext context) {
     Navigator.of(context).push(
@@ -1325,10 +1482,17 @@ class CleanHomeShell extends ConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content: Text(
-                    '✓ Historia oficial de 5s publicada. El anillo estilo Instagram ya está activo para todos los usuarios.')),
+                    '✓ Historia oficial de 5s publicada. El anillo estilo Instagram ya está activo.')),
           );
         },
       ),
+    );
+  }
+
+  void _openInvoiceScanner(BuildContext context) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: const SmartInvoiceScannerModal(),
     );
   }
 
@@ -1351,14 +1515,15 @@ class CleanHomeShell extends ConsumerWidget {
     final isSuperAdmin = session?.isSuperAdmin ?? false;
 
     final pages = [
-      const TodaySimpleView(),
-      const AccountsAndBillsView(),
+      const TodayDashboardView(),
+      const WalletsAndCatalogsView(),
+      const CopilotCardsAndGoalsView(),
       const FamilyInvitationsAndPlansView(),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 850;
+        final isWide = constraints.maxWidth >= 900;
 
         return Scaffold(
           appBar: AppBar(
@@ -1422,6 +1587,13 @@ class CleanHomeShell extends ConsumerWidget {
               ],
             ),
             actions: [
+              // Botón de Escáner de Facturas XML/OCR siempre a un toque en el AppBar
+              IconButton(
+                tooltip: 'Escanear Factura XML / OCR (IVA 15% & Deducibles)',
+                icon: const Icon(Icons.document_scanner_outlined),
+                onPressed: () => _openInvoiceScanner(context),
+              ),
+              // Consola de Historias exclusiva para el Desarrollador / SuperAdmin
               if (isSuperAdmin)
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
@@ -1433,7 +1605,7 @@ class CleanHomeShell extends ConsumerWidget {
                     ),
                     onPressed: () => _openSuperAdminStoryCreator(context),
                     icon: const Icon(Icons.admin_panel_settings, size: 16),
-                    label: const Text('+ Subir Historia 5s', style: TextStyle(fontSize: 11)),
+                    label: const Text('+ Subir Tip 5s', style: TextStyle(fontSize: 11)),
                   ),
                 ),
               IconButton(
@@ -1452,24 +1624,29 @@ class CleanHomeShell extends ConsumerWidget {
             children: [
               if (isWide)
                 NavigationRail(
-                  extended: constraints.maxWidth >= 1100,
+                  extended: constraints.maxWidth >= 1150,
                   selectedIndex: navIdx,
                   onDestinationSelected: (i) => ref.read(navIndexProvider.notifier).state = i,
                   destinations: const [
                     NavigationRailDestination(
                       icon: Icon(Icons.wb_sunny_outlined),
                       selectedIcon: Icon(Icons.wb_sunny),
-                      label: Text('Hoy (Registro 3s)'),
+                      label: Text('Hoy & Facturas OCR'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.account_balance_wallet_outlined),
                       selectedIcon: Icon(Icons.account_balance_wallet),
-                      label: Text('Cuentas y Billeteras'),
+                      label: Text('Billeteras & Rubros'),
+                    ),
+                    NavigationRailDestination(
+                      icon: Icon(Icons.insights_outlined),
+                      selectedIcon: Icon(Icons.insights),
+                      label: Text('Diferidos, Metas & 50/30/20'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.group_add_outlined),
                       selectedIcon: Icon(Icons.group_add),
-                      label: Text('Familia, Invitaciones & Planes'),
+                      label: Text('Familia & Planes USD'),
                     ),
                   ],
                 ),
@@ -1477,7 +1654,7 @@ class CleanHomeShell extends ConsumerWidget {
               Expanded(
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 920),
+                    constraints: const BoxConstraints(maxWidth: 1050),
                     child: pages[navIdx],
                   ),
                 ),
@@ -1494,13 +1671,15 @@ class CleanHomeShell extends ConsumerWidget {
                     NavigationDestination(
                         icon: Icon(Icons.account_balance_wallet_outlined), label: 'Billeteras'),
                     NavigationDestination(
+                        icon: Icon(Icons.insights_outlined), label: 'Copiloto'),
+                    NavigationDestination(
                         icon: Icon(Icons.group_add_outlined), label: 'Familia & Plan'),
                   ],
                 ),
-          floatingActionButton: FloatingActionButton(
-            tooltip: 'Formulario detallado o transferencia',
+          floatingActionButton: FloatingActionButton.extended(
             onPressed: () => _openManualForm(context),
-            child: const Icon(Icons.add),
+            icon: const Icon(Icons.add),
+            label: const Text('Registrar'),
           ),
         );
       },
@@ -1509,15 +1688,217 @@ class CleanHomeShell extends ConsumerWidget {
 }
 
 // ============================================================================
-// PESTAÑA 1: "HOY"
+// MODAL RESTAURADO: ESCÁNER INTELIGENTE DE FACTURAS (OCR / XML SRI + IVA 15%)
 // ============================================================================
-class TodaySimpleView extends ConsumerStatefulWidget {
-  const TodaySimpleView({super.key});
+class SmartInvoiceScannerModal extends ConsumerStatefulWidget {
+  const SmartInvoiceScannerModal({super.key});
   @override
-  ConsumerState<TodaySimpleView> createState() => _TodaySimpleViewState();
+  ConsumerState<SmartInvoiceScannerModal> createState() => _SmartInvoiceScannerModalState();
 }
 
-class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
+class _SmartInvoiceScannerModalState extends ConsumerState<SmartInvoiceScannerModal> {
+  final _merchantCtrl = TextEditingController(text: 'Corporación Favorita - Supermaxi');
+  final _totalCtrl = TextEditingController(text: '115.00');
+  String _selectedAccount = 'Billetera Digital (Payphone / Deuna)';
+
+  @override
+  Widget build(BuildContext context) {
+    final accounts = ref.watch(accountsProvider);
+    final members = ref.watch(householdMembersProvider);
+    final total = double.tryParse(_totalCtrl.text) ?? 0.0;
+    final subTotal = total / 1.15;
+    final iva15 = total - subTotal;
+
+    final lower = _merchantCtrl.text.toLowerCase();
+    final detectedCategory = lower.contains('super') || lower.contains('maxi')
+        ? 'Supermercado y Alimentación'
+        : lower.contains('farmacia') || lower.contains('salud') || lower.contains('fybeca')
+            ? 'Educación y Salud'
+            : 'Servicios Básicos (Luz/Agua/Net)';
+
+    final deductibleTag = detectedCategory == 'Supermercado y Alimentación'
+        ? 'Rubro Deducible SRI: Alimentación'
+        : detectedCategory == 'Educación y Salud'
+            ? 'Rubro Deducible SRI: Salud / Educación'
+            : 'Rubro Deducible SRI: Vivienda';
+
+    if (!accounts.any((a) => a.name == _selectedAccount)) {
+      _selectedAccount = accounts.first.name;
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.document_scanner, color: Colors.teal),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Escáner de Factura (XML / OCR)',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Desglosa IVA 15% y clasifica gastos deducibles',
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 24),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ActionChip(
+              avatar: const Icon(Icons.shopping_cart, size: 16),
+              label: const Text('Demo: Supermaxi (\$115)'),
+              onPressed: () => setState(() {
+                _merchantCtrl.text = 'Corporación Favorita - Supermaxi';
+                _totalCtrl.text = '115.00';
+              }),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.local_pharmacy, size: 16),
+              label: const Text('Demo: Fybeca (\$46)'),
+              onPressed: () => setState(() {
+                _merchantCtrl.text = 'Farmacias Fybeca S.A. - Medicinas';
+                _totalCtrl.text = '46.00';
+              }),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _merchantCtrl,
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
+            labelText: 'Razón Social / Comercio Detectado',
+            prefixIcon: Icon(Icons.storefront),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _totalCtrl,
+          onChanged: (_) => setState(() {}),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Valor Total Factura (USD)',
+            prefixIcon: Icon(Icons.attach_money),
+          ),
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          value: _selectedAccount,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Pagado con (Cuenta o Billetera)'),
+          items: accounts
+              .map((a) => DropdownMenuItem(
+                    value: a.name,
+                    child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedAccount = v!),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.teal.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.teal.withOpacity(0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                  'Subtotal: \$${subTotal.toStringAsFixed(2)}  •  IVA (15%): \$${iva15.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 4),
+              Text('Categoría IA: $detectedCategory', style: const TextStyle(fontSize: 12)),
+              Text('✓ $deductibleTag',
+                  style: const TextStyle(
+                      color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  if (total <= 0) return;
+                  final list = ref.read(transactionsListProvider);
+                  ref.read(transactionsListProvider.notifier).state = [
+                    TxItem(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      description:
+                          'Factura: ${_merchantCtrl.text} (IVA: \$${iva15.toStringAsFixed(2)})',
+                      amount: total,
+                      type: 2,
+                      categoryName: detectedCategory,
+                      accountName: _selectedAccount,
+                      memberName: members.first.name,
+                    ),
+                    ...list,
+                  ];
+
+                  ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                    if (acc.name == _selectedAccount) {
+                      return acc.copyWith(balance: acc.balance - total);
+                    }
+                    return acc;
+                  }).toList();
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('✓ Factura importada y descontada del saldo.')),
+                  );
+                },
+                icon: const Icon(Icons.check_circle_outline, size: 18),
+                label: const Text('Importar Factura'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// PESTAÑA 1: "HOY" (BARRA MÁGICA 3S + ESCÁNER FACTURAS + DESGLOSE BILLETERA + FILTROS)
+// ============================================================================
+class TodayDashboardView extends ConsumerStatefulWidget {
+  const TodayDashboardView({super.key});
+  @override
+  ConsumerState<TodayDashboardView> createState() => _TodayDashboardViewState();
+}
+
+class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
   final _magicInputCtrl = TextEditingController();
   String? _selectedAuthor;
 
@@ -1574,7 +1955,8 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
     final bills = ref.watch(recurringBillsProvider);
     final members = ref.watch(householdMembersProvider);
     final isFamily = ref.watch(isFamilyModeProvider);
-    final tier = ref.watch(subscriptionTierProvider);
+    final selectedMember = ref.watch(selectedMemberFilterProvider);
+    final searchQuery = ref.watch(searchQueryProvider);
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     if (_selectedAuthor == null || !members.any((m) => m.name == _selectedAuthor)) {
@@ -1582,6 +1964,20 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
     }
 
     final totalBalance = accounts.fold(0.0, (s, a) => s + a.balance);
+    final bankBalance = accounts
+        .where((a) => a.type == 'Banco' || a.type == 'Ahorro' || a.type == 'Cooperativa')
+        .fold(0.0, (s, a) => s + a.balance);
+    final digitalWalletBalance = accounts
+        .where((a) => a.type == 'Billetera Digital')
+        .fold(0.0, (s, a) => s + a.balance);
+    final cashBalance =
+        accounts.where((a) => a.type == 'Efectivo').fold(0.0, (s, a) => s + a.balance);
+
+    final income = allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
+    final expense = allTx.where((t) => t.type == 2).fold(0.0, (s, t) => s + t.amount);
+    final savingsRate = income > 0 ? ((income - expense) / income * 100).clamp(0.0, 100.0) : 0.0;
+    final healthScore = (savingsRate * 1.4).clamp(45.0, 98.0).toInt();
+
     final pendingBills =
         bills.where((b) => !b.isPaid).fold(0.0, (s, b) => s + b.amount);
     final freeMonthMoney = (totalBalance - pendingBills).clamp(0.0, double.infinity);
@@ -1590,6 +1986,16 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
     final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
     final remainingDays = (daysInMonth - now.day + 1).clamp(1, 31);
     final safeToSpendToday = freeMonthMoney / remainingDays;
+
+    final txAuthors = allTx.where((t) => t.type == 2).map((t) => t.memberName).toSet().toList();
+    final filteredTx = allTx.where((t) {
+      final matchesMember = selectedMember == null || t.memberName == selectedMember;
+      final matchesSearch = searchQuery.isEmpty ||
+          t.description.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          t.categoryName.toLowerCase().contains(searchQuery.toLowerCase()) ||
+          t.accountName.toLowerCase().contains(searchQuery.toLowerCase());
+      return matchesMember && matchesSearch;
+    }).toList();
 
     final quickPresets = [
       ('☕ Café / Snack \$3.50', 'Café y Snack 3.50 deuna'),
@@ -1601,54 +2007,110 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.25),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Row(
-                  children: [
-                    Icon(
-                      isFamily ? Icons.groups : Icons.person,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        isFamily
-                            ? 'Modo Familiar Activo (${members.length}/${tier.maxUsers} miembros compartiendo)'
-                            : 'Modo Personal Activo (1/1 usuario • Invita a alguien para pasar a Familiar)',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: () => ref.read(navIndexProvider.notifier).state = 2,
-                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                child: Text(isFamily ? 'Ver Familia' : '+ Invitar'),
-              ),
-            ],
-          ),
-        ),
-
+        // 1. TARJETA PRINCIPAL: DISPONIBLE PARA HOY + SALUD FINANCIERA + DESGLOSE BILLETERA DIGITAL
         Card(
           elevation: 0,
           color: Theme.of(context).colorScheme.primaryContainer,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Padding(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isFamily
+                              ? 'Disponible para gastar hoy en familia:'
+                              : 'Disponible para gastar hoy con tranquilidad:',
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          currency.format(safeToSpendToday),
+                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 12,
+                          children: [
+                            Text('▲ Ingresos: ${currency.format(income)}',
+                                style: TextStyle(
+                                    color: Colors.green.shade800,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12)),
+                            Text('▼ Gastos: ${currency.format(expense)}',
+                                style: TextStyle(
+                                    color: Colors.red.shade800,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12)),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text('Salud Financiera',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text('$healthScore / 100',
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
+                          Text('Ahorro: ${savingsRate.toStringAsFixed(1)}%',
+                              style: const TextStyle(fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 22),
+                // Desglose por tipo de saldo (Bancos vs Billetera Digital vs Efectivo)
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    _BalancePill(
+                      icon: Icons.account_balance,
+                      label: 'Bancos y Ahorros',
+                      amount: currency.format(bankBalance),
+                    ),
+                    _BalancePill(
+                      icon: Icons.qr_code_2,
+                      label: 'Saldo Billetera Digital',
+                      amount: currency.format(digitalWalletBalance),
+                      highlight: true,
+                    ),
+                    _BalancePill(
+                      icon: Icons.payments_outlined,
+                      label: 'Efectivo Disponible',
+                      amount: currency.format(cashBalance),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 2. BARRA MÁGICA DE 3 SEGUNDOS + ACCESO A ESCÁNER DE FACTURAS XML/OCR
+        Card(
+          elevation: 1,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1658,53 +2120,8 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Text(
-                      isFamily
-                          ? 'Nuestra familia puede gastar hoy con tranquilidad:'
-                          : 'Puedes gastar hoy con total tranquilidad:',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        'Restan $remainingDays días del mes',
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  currency.format(safeToSpendToday),
-                  style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Saldo disponible: ${currency.format(totalBalance)}  •  Protegido pagos fijos: ${currency.format(pendingBills)}',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Card(
-          elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
                     const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.auto_awesome, color: Colors.teal, size: 18),
                         SizedBox(width: 6),
@@ -1714,20 +2131,35 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
                         ),
                       ],
                     ),
-                    if (isFamily)
-                      DropdownButton<String>(
-                        value: _selectedAuthor,
-                        underline: const SizedBox.shrink(),
-                        isDense: true,
-                        items: members
-                            .map((m) => DropdownMenuItem(
-                                  value: m.name,
-                                  child: Text('Por: ${m.name}',
-                                      style: const TextStyle(fontSize: 12)),
-                                ))
-                            .toList(),
-                        onChanged: (v) => setState(() => _selectedAuthor = v),
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isFamily)
+                          DropdownButton<String>(
+                            value: _selectedAuthor,
+                            underline: const SizedBox.shrink(),
+                            isDense: true,
+                            items: members
+                                .map((m) => DropdownMenuItem(
+                                      value: m.name,
+                                      child: Text('Por: ${m.name}',
+                                          style: const TextStyle(fontSize: 12)),
+                                    ))
+                                .toList(),
+                            onChanged: (v) => setState(() => _selectedAuthor = v),
+                          ),
+                        const SizedBox(width: 6),
+                        TextButton.icon(
+                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                          onPressed: () => showAdaptiveSheetOrDialog(
+                            context: context,
+                            child: const SmartInvoiceScannerModal(),
+                          ),
+                          icon: const Icon(Icons.document_scanner_outlined, size: 16),
+                          label: const Text('Escanear Factura', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1772,21 +2204,55 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
             ),
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
+        // 3. BUSCADOR Y FILTRO POR INTEGRANTE
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              isFamily ? 'Movimientos Compartidos del Hogar' : 'Mis Últimos Movimientos',
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            Text('${allTx.length} anotados',
+            const Text('Historial de Movimientos',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            Text('${filteredTx.length} registros',
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
         const SizedBox(height: 8),
-        ...allTx.take(10).map((t) {
+        if (txAuthors.length > 1) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              ChoiceChip(
+                label: Text('Todos (${currency.format(expense)})'),
+                selected: selectedMember == null,
+                onSelected: (_) =>
+                    ref.read(selectedMemberFilterProvider.notifier).state = null,
+              ),
+              ...txAuthors.map((m) {
+                final mSpent = allTx
+                    .where((t) => t.type == 2 && t.memberName == m)
+                    .fold(0.0, (s, t) => s + t.amount);
+                return ChoiceChip(
+                  label: Text('$m (${currency.format(mSpent)})'),
+                  selected: selectedMember == m,
+                  onSelected: (_) =>
+                      ref.read(selectedMemberFilterProvider.notifier).state = m,
+                );
+              }),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        TextField(
+          onChanged: (v) => ref.read(searchQueryProvider.notifier).state = v,
+          decoration: const InputDecoration(
+            hintText: 'Buscar por descripción, categoría o billetera...',
+            prefixIcon: Icon(Icons.search),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 10),
+        ...filteredTx.map((t) {
           final isInc = t.type == 1;
           final isTransfer = t.type == 3;
           final fgColor = isTransfer
@@ -1811,7 +2277,7 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                isFamily ? '${t.accountName} • Por: ${t.memberName}' : t.accountName,
+                '${t.categoryName} • ${t.accountName} • ${t.memberName}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12),
@@ -1828,11 +2294,58 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
   }
 }
 
+class _BalancePill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String amount;
+  final bool highlight;
+
+  const _BalancePill({
+    required this.icon,
+    required this.label,
+    required this.amount,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: highlight
+            ? Colors.teal.shade800
+            : Theme.of(context).colorScheme.surface.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: highlight ? Colors.white : Colors.teal),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11, color: highlight ? Colors.teal.shade100 : Colors.grey)),
+              Text(amount,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: highlight ? Colors.white : null)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ============================================================================
-// PESTAÑA 2: CUENTAS, BILLETERAS DIGITALES Y PAGOS FIJOS DEL MES
+// PESTAÑA 2: BILLETERAS DIGITALES, CUENTAS, PAGOS FIJOS Y PARAMETRIZACIÓN DE RUBROS
 // ============================================================================
-class AccountsAndBillsView extends ConsumerWidget {
-  const AccountsAndBillsView({super.key});
+class WalletsAndCatalogsView extends ConsumerWidget {
+  const WalletsAndCatalogsView({super.key});
 
   void _openAddAccountModal(BuildContext context, {String defaultType = 'Billetera Digital'}) {
     showAdaptiveSheetOrDialog(
@@ -1841,24 +2354,34 @@ class AccountsAndBillsView extends ConsumerWidget {
     );
   }
 
+  void _openAddCategoryModal(BuildContext context, {int defaultType = 2}) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: _AddCategoryForm(defaultType: defaultType),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(accountsProvider);
-    final bills = ref.watch(recurringBillsProvider);
     final categories = ref.watch(categoriesProvider);
+    final bills = ref.watch(recurringBillsProvider);
     final allTx = ref.watch(transactionsListProvider);
+    final expenseCats = categories.where((c) => c.type == 2).toList();
+    final incomeCats = categories.where((c) => c.type == 1).toList();
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
+        // 1. CUENTAS BANCARIAS Y BILLETERAS DIGITALES
         Wrap(
           spacing: 10,
           runSpacing: 10,
           alignment: WrapAlignment.spaceBetween,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            const Text('Mis Cuentas y Billeteras Digitales',
+            const Text('1. Cuentas y Billeteras Digitales',
                 style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
             Wrap(
               spacing: 8,
@@ -1878,7 +2401,7 @@ class AccountsAndBillsView extends ConsumerWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         ...accounts.map((a) {
           final isDigital = a.type == 'Billetera Digital';
           return Card(
@@ -1890,17 +2413,23 @@ class AccountsAndBillsView extends ConsumerWidget {
                 child: Icon(getAccountTypeIcon(a.type), size: 20),
               ),
               title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(a.type),
-              trailing: Text(
-                currency.format(a.balance),
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              subtitle: Text('Opción de Saldo: ${a.type} • ${currency.format(a.balance)}'),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: accounts.length <= 1
+                    ? null
+                    : () {
+                        ref.read(accountsProvider.notifier).state =
+                            accounts.where((item) => item.id != a.id).toList();
+                      },
               ),
             ),
           );
         }),
-        const SizedBox(height: 24),
+        const SizedBox(height: 22),
 
-        const Text('Pagos Fijos del Mes (Protegidos en tu saldo)',
+        // 2. PAGOS FIJOS DEL MES
+        const Text('2. Pagos Fijos y Suscripciones del Mes',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         ...bills.map((b) => Card(
@@ -1923,12 +2452,26 @@ class AccountsAndBillsView extends ConsumerWidget {
                       ),
               ),
             )),
-        const SizedBox(height: 24),
+        const SizedBox(height: 22),
 
-        const Text('Límites de Tranquilidad Mensual',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        ...categories.where((c) => c.type == 2).map((c) {
+        // 3. PARAMETRIZACIÓN DE TIPOS DE GASTOS Y PRESUPUESTOS
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('3. Tipos de Gastos y Presupuestos Mensuales',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _openAddCategoryModal(context, defaultType: 2),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Rubro de Gasto'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...expenseCats.map((c) {
           final spent = allTx
               .where((t) => t.type == 2 && t.categoryName == c.name)
               .fold(0.0, (s, t) => s + t.amount);
@@ -1936,21 +2479,19 @@ class AccountsAndBillsView extends ConsumerWidget {
               c.monthlyBudget > 0 ? (spent / c.monthlyBudget).clamp(0.0, 1.0) : 0.0;
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
+            child: ListTile(
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                      child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                  Text('${currency.format(spent)} / ${currency.format(c.monthlyBudget)}',
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                          child: Text(c.name,
-                              style: const TextStyle(fontWeight: FontWeight.bold))),
-                      Text('${currency.format(spent)} / ${currency.format(c.monthlyBudget)}',
-                          style: const TextStyle(fontSize: 12)),
-                    ],
-                  ),
                   const SizedBox(height: 6),
                   LinearProgressIndicator(
                     value: progress,
@@ -1958,11 +2499,61 @@ class AccountsAndBillsView extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(4),
                     color: progress > 0.85 ? Colors.red : null,
                   ),
+                  const SizedBox(height: 4),
+                  Text(c.bucket503020, style: const TextStyle(fontSize: 11)),
                 ],
+              ),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: expenseCats.length <= 1
+                    ? null
+                    : () {
+                        ref.read(categoriesProvider.notifier).state =
+                            categories.where((item) => item.id != c.id).toList();
+                      },
               ),
             ),
           );
         }),
+        const SizedBox(height: 22),
+
+        // 4. PARAMETRIZACIÓN DE TIPOS DE INGRESOS
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('4. Tipos de Ingresos',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _openAddCategoryModal(context, defaultType: 1),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Rubro de Ingreso'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...incomeCats.map((c) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.green.shade100,
+                  child: Icon(Icons.trending_up, color: Colors.green.shade800, size: 18),
+                ),
+                title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Categoría de Ingreso Activa'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: incomeCats.length <= 1
+                      ? null
+                      : () {
+                          ref.read(categoriesProvider.notifier).state =
+                              categories.where((item) => item.id != c.id).toList();
+                        },
+                ),
+              ),
+            )),
       ],
     );
   }
@@ -2001,10 +2592,15 @@ class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
         DropdownButtonFormField<String>(
           value: _selectedType,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Opción de Saldo'),
-          items: ['Billetera Digital', 'Banco', 'Efectivo', 'Tarjeta de Crédito']
-              .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-              .toList(),
+          decoration: const InputDecoration(labelText: 'Opción de Saldo / Tipo'),
+          items: [
+            'Billetera Digital',
+            'Banco',
+            'Efectivo',
+            'Tarjeta de Crédito',
+            'Ahorro',
+            'Cooperativa'
+          ].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
           onChanged: (v) => setState(() => _selectedType = v!),
         ),
         const SizedBox(height: 14),
@@ -2067,8 +2663,454 @@ class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
   }
 }
 
+class _AddCategoryForm extends ConsumerStatefulWidget {
+  final int defaultType;
+  const _AddCategoryForm({required this.defaultType});
+
+  @override
+  ConsumerState<_AddCategoryForm> createState() => _AddCategoryFormState();
+}
+
+class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
+  final _nameCtrl = TextEditingController();
+  late final TextEditingController _budgetCtrl;
+  late int _selectedType;
+  String _selectedBucket = 'Necesidades (50%)';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.defaultType;
+    _budgetCtrl = TextEditingController(text: widget.defaultType == 2 ? '200' : '0');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Parametrizar Rubro de Ingreso / Gasto',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 2, label: Text('Gasto'), icon: Icon(Icons.trending_down)),
+            ButtonSegment(value: 1, label: Text('Ingreso'), icon: Icon(Icons.trending_up)),
+          ],
+          selected: {_selectedType},
+          onSelectionChanged: (s) => setState(() => _selectedType = s.first),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _nameCtrl,
+          decoration: InputDecoration(
+            labelText:
+                _selectedType == 2 ? 'Nombre del Rubro de Gasto' : 'Nombre del Rubro de Ingreso',
+          ),
+        ),
+        if (_selectedType == 2) ...[
+          const SizedBox(height: 14),
+          TextField(
+            controller: _budgetCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Presupuesto Mensual Tope (USD)',
+              prefixIcon: Icon(Icons.attach_money),
+            ),
+          ),
+          const SizedBox(height: 14),
+          DropdownButtonFormField<String>(
+            value: _selectedBucket,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Clasificación Regla 50/30/20'),
+            items: [
+              'Necesidades (50%)',
+              'Deseos / Estilo de Vida (30%)',
+              'Ahorro / Deudas (20%)',
+            ].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+            onChanged: (v) => setState(() => _selectedBucket = v!),
+          ),
+        ],
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () {
+                  if (_nameCtrl.text.trim().isEmpty) return;
+                  final budget =
+                      _selectedType == 2 ? (double.tryParse(_budgetCtrl.text) ?? 0.0) : 0.0;
+                  final current = ref.read(categoriesProvider);
+                  ref.read(categoriesProvider.notifier).state = [
+                    ...current,
+                    CategoryModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      name: _nameCtrl.text.trim(),
+                      type: _selectedType,
+                      monthlyBudget: budget,
+                      bucket503020: _selectedBucket,
+                    ),
+                  ];
+                  Navigator.pop(context);
+                },
+                child: const Text('Guardar Rubro'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 // ============================================================================
-// PESTAÑA 3: INVITACIONES POR CORREO & 3 PLANES (MENSUAL Y ANUAL EN DÓLARES)
+// PESTAÑA 3 RESTAURADA: DIFERIDOS DE TARJETAS, METAS DE AHORRO, COPILOTO 50/30/20 & EXCEL CSV
+// ============================================================================
+class CopilotCardsAndGoalsView extends ConsumerWidget {
+  const CopilotCardsAndGoalsView({super.key});
+
+  String _generateCsv(List<TxItem> items) {
+    final buffer = StringBuffer();
+    buffer.writeln('Fecha,Tipo,Categoria,Descripcion,Cuenta_Billetera,Miembro,Monto_USD');
+    for (final t in items) {
+      final tipo = t.type == 1 ? 'INGRESO' : (t.type == 3 ? 'TRANSFERENCIA' : 'GASTO');
+      final fecha = DateFormat('yyyy-MM-dd').format(t.date);
+      buffer.writeln(
+          '$fecha,$tipo,${t.categoryName},${t.description},${t.accountName},${t.memberName},${t.amount.toStringAsFixed(2)}');
+    }
+    return buffer.toString();
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final subTab = ref.watch(copilotSubTabProvider);
+    final installments = ref.watch(installmentsProvider);
+    final goals = ref.watch(savingsGoalsProvider);
+    final allTx = ref.watch(transactionsListProvider);
+    final categories = ref.watch(categoriesProvider);
+    final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+
+    final income = allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
+    final expenses = allTx.where((t) => t.type == 2).toList();
+    final totalExpense = expenses.fold(0.0, (s, e) => s + e.amount);
+
+    double needsSpent = 0;
+    double wantsSpent = 0;
+    for (final e in expenses) {
+      final cat = categories.where((c) => c.name == e.categoryName).firstOrNull;
+      if (cat != null && cat.bucket503020.contains('30%')) {
+        wantsSpent += e.amount;
+      } else {
+        needsSpent += e.amount;
+      }
+    }
+    final savingsActual = (income - totalExpense).clamp(0.0, double.infinity);
+
+    final microExpenses = expenses.where((e) => e.amount <= 15.0).toList();
+    final microTotal = microExpenses.fold(0.0, (s, e) => s + e.amount);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
+      children: [
+        // Sub-navegación limpia para que todo esté disponible sin saturar la vista
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(
+              value: 0,
+              icon: Icon(Icons.credit_score, size: 18),
+              label: Text('Tarjetas y Diferidos'),
+            ),
+            ButtonSegment(
+              value: 1,
+              icon: Icon(Icons.savings_outlined, size: 18),
+              label: Text('Metas de Ahorro'),
+            ),
+            ButtonSegment(
+              value: 2,
+              icon: Icon(Icons.auto_graph, size: 18),
+              label: Text('50/30/20 & CSV'),
+            ),
+          ],
+          selected: {subTab},
+          onSelectionChanged: (s) => ref.read(copilotSubTabProvider.notifier).state = s.first,
+        ),
+        const SizedBox(height: 18),
+
+        // SUB-VISTA 0: TARJETAS DE CRÉDITO Y DIFERIDOS (CUOTAS)
+        if (subTab == 0) ...[
+          const Text('Control de Tarjetas de Crédito y Compras Diferidas',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('Seguimiento de cuotas mensuales, fechas de corte y fechas de pago',
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 12),
+          ...installments.map((inst) {
+            final progress = (inst.paidMonths / inst.totalMonths).clamp(0.0, 1.0);
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('${inst.cardName} • ${inst.description}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(
+                              'Corte: Día ${inst.cutOffDay} | Pago: Día ${inst.paymentDueDay}',
+                              style: const TextStyle(fontSize: 11)),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text('Cuota: ${currency.format(inst.monthlyQuota)}/mes',
+                              style: const TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(value: progress, minHeight: 8),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                          'Pagadas: ${inst.paidMonths}/${inst.totalMonths} cuotas • Saldo restante: ${currency.format(inst.remainingBalance)}',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        if (inst.paidMonths < inst.totalMonths)
+                          FilledButton.tonal(
+                            onPressed: () {
+                              ref.read(installmentsProvider.notifier).state = installments
+                                  .map((item) => item.id == inst.id
+                                      ? item.copyWith(paidMonths: item.paidMonths + 1)
+                                      : item)
+                                  .toList();
+                            },
+                            child: const Text('Pagar Cuota'),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+
+        // SUB-VISTA 1: METAS DE AHORRO FAMILIAR
+        if (subTab == 1) ...[
+          const Text('Metas de Ahorro',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('Objetivos financieros con seguimiento de progreso y abonos rápidos',
+              style: TextStyle(color: Colors.grey, fontSize: 13)),
+          const SizedBox(height: 12),
+          ...goals.map((g) {
+            final pct = (g.currentAmount / g.targetAmount).clamp(0.0, 1.0);
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(g.title,
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                        Chip(
+                          visualDensity: VisualDensity.compact,
+                          label: Text(g.deadline, style: const TextStyle(fontSize: 11)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(value: pct, minHeight: 9),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        Text(
+                            'Ahorrado: ${currency.format(g.currentAmount)} de ${currency.format(g.targetAmount)} (${(pct * 100).toInt()}%)'),
+                        FilledButton.tonalIcon(
+                          onPressed: () {
+                            ref.read(savingsGoalsProvider.notifier).state = goals
+                                .map((item) => item.id == g.id
+                                    ? item.copyWith(currentAmount: item.currentAmount + 100)
+                                    : item)
+                                .toList();
+                          },
+                          icon: const Icon(Icons.add, size: 16),
+                          label: const Text('Abonar +\$100'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+
+        // SUB-VISTA 2: COPILOTO 50/30/20, GASTOS HORMIGA & EXPORTACIÓN EXCEL / CSV
+        if (subTab == 2) ...[
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Diagnóstico 50/30/20 & Exportación Contable',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('Evaluación inteligente de tus finanzas y descarga para Excel',
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                ],
+              ),
+              FilledButton.icon(
+                onPressed: () {
+                  final csv = _generateCsv(allTx);
+                  Clipboard.setData(ClipboardData(text: csv));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('✓ Sábana contable CSV copiada para Excel / Google Sheets.')),
+                  );
+                },
+                icon: const Icon(Icons.download, size: 18),
+                label: const Text('Exportar Excel / CSV'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Regla 50% Necesidades / 30% Deseos / 20% Ahorro',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 14),
+                  _RuleBar(
+                    title: 'Necesidades Básicas (Meta <= 50%)',
+                    amount: currency.format(needsSpent),
+                    target: currency.format(income * 0.50),
+                    ratio: income > 0 ? (needsSpent / (income * 0.50)).clamp(0.0, 1.0) : 0.0,
+                    color: Colors.teal,
+                  ),
+                  const SizedBox(height: 12),
+                  _RuleBar(
+                    title: 'Estilo de Vida y Ocio (Meta <= 30%)',
+                    amount: currency.format(wantsSpent),
+                    target: currency.format(income * 0.30),
+                    ratio: income > 0 ? (wantsSpent / (income * 0.30)).clamp(0.0, 1.0) : 0.0,
+                    color: Colors.amber.shade800,
+                  ),
+                  const SizedBox(height: 12),
+                  _RuleBar(
+                    title: 'Ahorro Neto Disponible (Meta >= 20%)',
+                    amount: currency.format(savingsActual),
+                    target: currency.format(income * 0.20),
+                    ratio: income > 0
+                        ? (savingsActual / (income * 0.20)).clamp(0.0, 1.0)
+                        : 0.0,
+                    color: Colors.green.shade700,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: Colors.orange.shade100,
+                child: Icon(Icons.bug_report, color: Colors.orange.shade900),
+              ),
+              title: const Text('Detector de "Gastos Hormiga" (Compras <= \$15)',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                  'Se detectaron ${microExpenses.length} micro-gastos este mes (${currency.format(microTotal)}). Fuga anual proyectada: ${currency.format(microTotal * 12)}.'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _RuleBar extends StatelessWidget {
+  final String title;
+  final String amount;
+  final String target;
+  final double ratio;
+  final Color color;
+
+  const _RuleBar({
+    required this.title,
+    required this.amount,
+    required this.target,
+    required this.ratio,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 8,
+          children: [
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('$amount / $target', style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        LinearProgressIndicator(
+          value: ratio,
+          minHeight: 8,
+          color: color,
+          borderRadius: BorderRadius.circular(5),
+        ),
+      ],
+    );
+  }
+}
+
+// ============================================================================
+// PESTAÑA 4: INVITACIONES POR CORREO & 3 PLANES EN USD (MENSUAL Y ANUAL -33%)
 // ============================================================================
 class FamilyInvitationsAndPlansView extends ConsumerStatefulWidget {
   const FamilyInvitationsAndPlansView({super.key});
@@ -2346,7 +3388,7 @@ class _FamilyInvitationsAndPlansViewState
           Card(
             child: ListTile(
               leading: const Icon(Icons.balance, color: Colors.teal),
-              title: const Text('Cuota Equitativa Familiar',
+              title: const Text('Cuota Equitativa Familiar (Split)',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
                   'Gasto total compartido: ${currency.format(totalSharedExpense)} • Promedio por integrante (${members.length}): ${currency.format(totalSharedExpense / members.length)}'),
@@ -2722,7 +3764,7 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
 }
 
 // ============================================================================
-// MODAL MANUAL (PARA REGISTROS DETALLADOS O TRANSFERENCIAS ENTRE BILLETERAS)
+// MODAL MANUAL (GASTO | INGRESO | RECARGAR BILLETERA / TRANSFERIR)
 // ============================================================================
 class ManualTxFormModal extends ConsumerStatefulWidget {
   final int initialType;

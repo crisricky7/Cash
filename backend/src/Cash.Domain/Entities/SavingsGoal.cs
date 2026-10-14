@@ -7,5 +7,4 @@ public class SavingsGoal
     public decimal TargetAmount { get; set; }
     public decimal CurrentAmount { get; set; }
     public DateTime TargetDate { get; set; }
-    public string Icon { get; set; } = "savings";
 }
