@@ -1,11 +1,11 @@
 namespace Cash.Application.DTOs;
 
-// Payphone DTOs (Montos expresados en centavos según estándar de Payphone)
 public record PayphonePrepareRequest(string PlanCode, string UserEmail);
 
 public record PayphonePrepareResponse(
     string ClientTransactionId,
     string StoreId,
+    decimal AmountUsd,
     int AmountInCents,
     int AmountWithoutTaxInCents,
     int AmountWithTaxInCents,
@@ -22,7 +22,6 @@ public record PayphoneConfirmResponse(
     string Message,
     string PlanActivated);
 
-// RevenueCat Webhook & Mobile Sync DTOs
 public record RevenueCatWebhookPayload(RevenueCatEvent? Event);
 
 public record RevenueCatEvent(
@@ -36,5 +35,5 @@ public record RevenueCatEvent(
 public record RevenueCatMobileVerifyRequest(
     string AppUserId,
     string ProductId,
-    string Store, // PLAY_STORE | APP_STORE
+    string Store,
     string ReceiptOrTransactionId);

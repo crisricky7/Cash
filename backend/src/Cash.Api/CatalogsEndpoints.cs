@@ -10,7 +10,6 @@ public static class CatalogsEndpoints
     {
         var group = app.MapGroup("/api/catalogs").RequireAuthorization();
 
-        // Crear Cuenta (Banco, Billetera Digital, Efectivo, etc.)
         group.MapPost("/accounts", async (CreateAccountRequest req, IUnitOfWork uow, CancellationToken ct) =>
         {
             var account = new Account
@@ -25,7 +24,6 @@ public static class CatalogsEndpoints
             return Results.Created($"/api/catalogs/accounts/{account.Id}", account);
         });
 
-        // Transferencia o Recarga hacia Billetera Digital (No suma como gasto mensual)
         group.MapPost("/accounts/transfer", async (TransferBalanceRequest req, IUnitOfWork uow, CancellationToken ct) =>
         {
             if (req.Amount <= 0) return Results.BadRequest(new { message = "El monto debe ser mayor a cero." });
@@ -49,14 +47,13 @@ public static class CatalogsEndpoints
                 Amount = req.Amount,
                 Type = TransactionType.Transfer,
                 Description = $"Transferencia / Recarga: {source.Name} → {dest.Name}",
-                MemberName = string.IsNullOrWhiteSpace(req.MemberName) ? "Hogar" : req.MemberName
+                MemberName = string.IsNullOrWhiteSpace(req.MemberName) ? "Titular" : req.MemberName
             }, ct);
 
             await uow.SaveChangesAsync(ct);
             return Results.Ok(new { sourceBalance = source.Balance, destinationBalance = dest.Balance });
         });
 
-        // Eliminar Cuenta
         group.MapDelete("/accounts/{id:guid}", async (Guid id, IUnitOfWork uow, CancellationToken ct) =>
         {
             var acc = await uow.Accounts.GetByIdAsync(id, ct);
@@ -66,7 +63,6 @@ public static class CatalogsEndpoints
             return Results.NoContent();
         });
 
-        // Crear Categoría de Ingreso o Gasto
         group.MapPost("/categories", async (CreateCategoryRequest req, IUnitOfWork uow, CancellationToken ct) =>
         {
             var category = new Category
@@ -81,7 +77,6 @@ public static class CatalogsEndpoints
             return Results.Created($"/api/catalogs/categories/{category.Id}", category);
         });
 
-        // Eliminar Categoría
         group.MapDelete("/categories/{id:guid}", async (Guid id, IUnitOfWork uow, CancellationToken ct) =>
         {
             var cat = await uow.Categories.GetByIdAsync(id, ct);

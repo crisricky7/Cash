@@ -8,5 +8,5 @@ public record TransactionDto(Guid Id, string Description, decimal Amount, Transa
 public record CategoryBudgetDto(Guid CategoryId, string CategoryName, decimal MonthlyBudget, decimal SpentAmount);
 public record DashboardDto(decimal TotalBalance, decimal MonthlyIncome, decimal MonthlyExpense, IReadOnlyList<MemberExpenseSummaryDto> MemberExpenses, IReadOnlyList<TransactionDto> RecentTransactions, IReadOnlyList<CategoryBudgetDto> Budgets);
 public record CatalogsDto(IReadOnlyList<AccountItemDto> Accounts, IReadOnlyList<CategoryItemDto> Categories);
-public record AccountItemDto(Guid Id, string Name, decimal Balance);
+public record AccountItemDto(Guid Id, string Name, string AccountType, decimal Balance);
 public record CategoryItemDto(Guid Id, string Name, TransactionType Type, decimal MonthlyBudget);

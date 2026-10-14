@@ -68,16 +68,16 @@ protectedApi.MapGet("/catalogs", async (ISender sender) => Results.Ok(await send
 protectedApi.MapPost("/transactions", async (CreateTransactionRequest req, ClaimsPrincipal user, ISender sender) =>
 {
     var userIdStr = user.FindFirstValue(ClaimTypes.NameIdentifier);
-    var fullName = user.FindFirstValue("fullName") ?? "Hogar";
+    var fullName = user.FindFirstValue("fullName") ?? "Titular";
     Guid? userId = Guid.TryParse(userIdStr, out var parsed) ? parsed : null;
     var id = await sender.Send(new CreateTransactionCommand(req.AccountId, req.CategoryId, req.Amount, req.Type, req.Description, userId, fullName));
     return Results.Created($"/api/transactions/{id}", new { id });
 });
 
-// Endpoints de Exportación CSV y Pasarelas de Pago (Payphone + RevenueCat)
 app.MapExportEndpoints();
 app.MapBillingEndpoints();
-app.MapSmartFeaturesEndpoints();
+app.MapCatalogsCrudEndpoints();
+app.MapFamilyAndStoriesEndpoints();
 
 app.Run();
 

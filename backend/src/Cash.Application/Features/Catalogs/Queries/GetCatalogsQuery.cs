@@ -14,7 +14,7 @@ public class GetCatalogsQueryHandler(IUnitOfWork unitOfWork) : IRequestHandler<G
         var categories = await unitOfWork.Categories.GetAllAsync(cancellationToken);
 
         return new CatalogsDto(
-            accounts.Select(a => new AccountItemDto(a.Id, a.Name, a.Balance)).ToList(),
+            accounts.Select(a => new AccountItemDto(a.Id, a.Name, a.AccountType, a.Balance)).ToList(),
             categories.Select(c => new CategoryItemDto(c.Id, c.Name, c.Type, c.MonthlyBudget)).ToList()
         );
     }

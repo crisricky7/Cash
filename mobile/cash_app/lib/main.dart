@@ -72,7 +72,7 @@ Future<void> showAdaptiveSheetOrDialog({
 }
 
 // ============================================================================
-// MODELOS DE DOMINIO: 3 PLANES CON OPCIÓN MENSUAL Y ANUAL CON DESCUENTO (USD)
+// MODELOS DE DOMINIO: 3 PLANES (1, 4, 7 USUARIOS) CON MENSUAL Y ANUAL EN USD
 // ============================================================================
 enum SubscriptionTier {
   personal(
@@ -211,7 +211,7 @@ class FinancialStoryTip {
 class AccountModel {
   final String id;
   final String name;
-  final String type;
+  final String type; // Banco, Billetera Digital, Efectivo, Tarjeta de Crédito
   final double balance;
   AccountModel({required this.id, required this.name, required this.type, required this.balance});
 
@@ -226,7 +226,7 @@ class AccountModel {
 class CategoryModel {
   final String id;
   final String name;
-  final int type;
+  final int type; // 1 = Ingreso, 2 = Gasto
   final double monthlyBudget;
   CategoryModel({
     required this.id,
@@ -240,7 +240,7 @@ class TxItem {
   final String id;
   final String description;
   final double amount;
-  final int type;
+  final int type; // 1 = Ingreso, 2 = Gasto, 3 = Transferencia / Recarga
   final String categoryName;
   final String accountName;
   final String memberName;
@@ -376,7 +376,6 @@ final authSessionProvider = StateProvider<AuthSession?>((ref) => null);
 final isDarkModeProvider = StateProvider<bool>((ref) => false);
 final navIndexProvider = StateProvider<int>((ref) => 0);
 
-// Plan activo y ciclo de facturación seleccionado (true = Anual con 33% dto, false = Mensual)
 final subscriptionTierProvider =
     StateProvider<SubscriptionTier>((ref) => SubscriptionTier.personal);
 final isAnnualBillingSelectedProvider = StateProvider<bool>((ref) => true);
@@ -394,7 +393,7 @@ final householdMembersProvider = StateProvider<List<HouseholdMember>>((ref) => [
 
 final pendingInvitationsProvider = StateProvider<List<EmailInvitation>>((ref) => []);
 
-// 1 persona registrada = Modo Personal (false) | > 1 persona registrada = Modo Familiar (true)
+// REGLA AUTOMÁTICA: 1 usuario = Modo Personal (false) | >1 usuarios = Modo Familiar (true)
 final isFamilyModeProvider = Provider<bool>((ref) {
   final members = ref.watch(householdMembersProvider);
   return members.length > 1;
@@ -1600,7 +1599,7 @@ class _TodaySimpleViewState extends ConsumerState<TodaySimpleView> {
     ];
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
         Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -1851,7 +1850,7 @@ class AccountsAndBillsView extends ConsumerWidget {
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
         Wrap(
           spacing: 10,
@@ -2069,7 +2068,7 @@ class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
 }
 
 // ============================================================================
-// PESTAÑA 3: INVITACIONES POR CORREO & 3 PLANES (MENSUAL Y ANUAL CON DESCUENTO)
+// PESTAÑA 3: INVITACIONES POR CORREO & 3 PLANES (MENSUAL Y ANUAL EN DÓLARES)
 // ============================================================================
 class FamilyInvitationsAndPlansView extends ConsumerStatefulWidget {
   const FamilyInvitationsAndPlansView({super.key});
@@ -2173,9 +2172,8 @@ class _FamilyInvitationsAndPlansViewState
     final totalSharedExpense = expenses.fold(0.0, (s, e) => s + e.amount);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        // 1. ESTADO AUTOMÁTICO (PERSONAL VS FAMILIAR)
         Card(
           elevation: 0,
           color: Theme.of(context).colorScheme.primaryContainer,
@@ -2215,7 +2213,6 @@ class _FamilyInvitationsAndPlansViewState
         ),
         const SizedBox(height: 18),
 
-        // 2. INVITAR FAMILIAR POR CORREO ELECTRÓNICO
         Card(
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -2316,7 +2313,6 @@ class _FamilyInvitationsAndPlansViewState
         ],
         const SizedBox(height: 18),
 
-        // 3. INTEGRANTES ACTIVOS
         const Text('Integrantes Activos en la Cuenta',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
@@ -2359,16 +2355,13 @@ class _FamilyInvitationsAndPlansViewState
         ],
         const SizedBox(height: 28),
 
-        // ====================================================================
-        // 4. PLANES DE SUSCRIPCIÓN CON SELECTOR MENSUAL VS ANUAL (33% DTO)
-        // ====================================================================
+        // PLANES DE SUSCRIPCIÓN EN USD CON MENSUAL Y ANUAL (-33%)
         const Text('Planes de Suscripción (Precios en USD)',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         Text('Suscripción activa: $activeBillingText',
             style: const TextStyle(fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
 
-        // Selector de Ciclo de Facturación: Mensual vs Anual con 33% de Descuento
         SegmentedButton<bool>(
           segments: const [
             ButtonSegment<bool>(
@@ -2586,7 +2579,6 @@ class _UpgradeTierPromptSheet extends ConsumerWidget {
   }
 }
 
-// Modal de Checkout Híbrido con selector Mensual vs Anual (Precios estrictamente en USD)
 class _TierCheckoutSheet extends ConsumerStatefulWidget {
   final SubscriptionTier targetTier;
   final bool initialIsAnnual;
@@ -2625,7 +2617,6 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
 
-        // Selector de modalidad dentro del Checkout: Mensual vs Anual con 33% de descuento
         SegmentedButton<bool>(
           segments: [
             ButtonSegment<bool>(

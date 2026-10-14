@@ -10,21 +10,18 @@ public static class BillingEndpoints
     {
         var group = app.MapGroup("/api/billing");
 
-        // 1. Preparar orden para Cajita de Pagos Payphone (Web)
         group.MapPost("/payphone/prepare", (PayphonePrepareRequest req, PayphoneGatewayService service) =>
         {
             var res = service.PrepareCheckout(req);
             return Results.Ok(res);
         });
 
-        // 2. Confirmar transacción con Payphone V2 (Evita el reverso automático de los 5 minutos)
         group.MapPost("/payphone/confirm", async (PayphoneConfirmRequest req, PayphoneGatewayService service, CancellationToken ct) =>
         {
             var res = await service.ConfirmTransactionAsync(req, ct);
             return res.Success ? Results.Ok(res) : Results.BadRequest(res);
         });
 
-        // 3. Webhook Server-to-Server de RevenueCat (Google Play & Apple App Store)
         group.MapPost("/revenuecat/webhook", (HttpRequest httpRequest, RevenueCatWebhookPayload payload, IConfiguration config) =>
         {
             var expectedSecret = config["RevenueCat:WebhookSecret"];
@@ -38,7 +35,6 @@ public static class BillingEndpoints
             var evt = payload.Event;
             if (evt is null) return Results.BadRequest(new { message = "Evento vacío" });
 
-            // Eventos estándar de RevenueCat: INITIAL_PURCHASE, RENEWAL, CANCELLATION, EXPIRATION
             var isProActive = evt.Type is "INITIAL_PURCHASE" or "RENEWAL" or "UNCANCELLATION";
 
             return Results.Ok(new
@@ -51,7 +47,6 @@ public static class BillingEndpoints
             });
         });
 
-        // 4. Verificación directa desde el SDK móvil de Flutter
         group.MapPost("/revenuecat/verify", (RevenueCatMobileVerifyRequest req) =>
         {
             return Results.Ok(new

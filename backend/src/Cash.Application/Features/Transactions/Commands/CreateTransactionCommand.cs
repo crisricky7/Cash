@@ -22,7 +22,7 @@ public class CreateTransactionCommandHandler(IUnitOfWork unitOfWork) : IRequestH
             Amount = request.Amount,
             Type = request.Type,
             Description = request.Description,
-            MemberName = string.IsNullOrWhiteSpace(request.MemberName) ? "Hogar" : request.MemberName,
+            MemberName = string.IsNullOrWhiteSpace(request.MemberName) ? "Titular" : request.MemberName,
             Date = DateTime.UtcNow
         };
 

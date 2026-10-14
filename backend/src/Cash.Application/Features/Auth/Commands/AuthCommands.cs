@@ -23,7 +23,7 @@ public class LoginCommandHandler(IUnitOfWork unitOfWork, IJwtProvider jwtProvide
     }
 }
 
-public record RegisterMemberCommand(string FullName, string Email, string Password, string Role = "Miembro") : IRequest<AuthResponseDto>;
+public record RegisterMemberCommand(string FullName, string Email, string Password, string Role = "Usuario") : IRequest<AuthResponseDto>;
 
 public class RegisterMemberCommandHandler(IUnitOfWork unitOfWork, IJwtProvider jwtProvider)
     : IRequestHandler<RegisterMemberCommand, AuthResponseDto>
@@ -39,7 +39,7 @@ public class RegisterMemberCommandHandler(IUnitOfWork unitOfWork, IJwtProvider j
             FullName = request.FullName.Trim(),
             Email = email,
             PasswordHash = jwtProvider.HashPassword(request.Password),
-            Role = string.IsNullOrWhiteSpace(request.Role) ? "Miembro" : request.Role
+            Role = string.IsNullOrWhiteSpace(request.Role) ? "Usuario" : request.Role
         };
 
         await unitOfWork.Users.AddAsync(user, cancellationToken);

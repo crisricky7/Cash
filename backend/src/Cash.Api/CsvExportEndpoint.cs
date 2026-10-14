@@ -23,7 +23,7 @@ public static class CsvExportEndpoint
             }
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            return Results.File(bytes, "text/csv", $"Cash_Reporte_Hogar_{DateTime.UtcNow:yyyyMM}.csv");
+            return Results.File(bytes, "text/csv", $"Cash_Reporte_{DateTime.UtcNow:yyyyMM}.csv");
         }).RequireAuthorization();
     }
 }

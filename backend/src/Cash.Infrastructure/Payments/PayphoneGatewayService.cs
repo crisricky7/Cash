@@ -33,6 +33,7 @@ public class PayphoneGatewayService(HttpClient httpClient, IConfiguration config
         return new PayphonePrepareResponse(
             ClientTransactionId: clientTxId,
             StoreId: storeId,
+            AmountUsd: priceUsd,
             AmountInCents: totalInternalUnits,
             AmountWithoutTaxInCents: 0,
             AmountWithTaxInCents: baseUnits,
