@@ -15,6 +15,68 @@ class BillingConfig {
 }
 
 // ============================================================================
+// UTILIDAD RESPONSIVA GLOBAL: MODAL ADAPTATIVO A PRUEBA DE TECLADO MÓVIL
+// ============================================================================
+Future<void> showAdaptiveSheetOrDialog({
+  required BuildContext context,
+  required Widget child,
+}) {
+  final width = MediaQuery.sizeOf(context).width;
+  if (width >= 650) {
+    return showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  } else {
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        final bottomInset = MediaQuery.viewInsetsOf(ctx).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 5,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                ),
+                child,
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ============================================================================
 // MODELOS DE DOMINIO Y PROVIDERS DINÁMICOS
 // ============================================================================
 class AuthSession {
@@ -27,7 +89,7 @@ class AuthSession {
 class AccountModel {
   final String id;
   final String name;
-  final String type; // Banco, Billetera Digital, Efectivo, Tarjeta de Crédito, Ahorro, Cooperativa
+  final String type;
   final double balance;
   AccountModel({required this.id, required this.name, required this.type, required this.balance});
 
@@ -44,8 +106,8 @@ class CategoryModel {
   final String name;
   final int type; // 1 = Ingreso, 2 = Gasto
   final double monthlyBudget;
-  final String bucket503020; // Necesidades (50%) | Deseos/Estilo de Vida (30%) | Ahorro/Deuda (20%)
-  final String taxGroup; // Rubro deducible impuestos
+  final String bucket503020;
+  final String taxGroup;
   CategoryModel({
     required this.id,
     required this.name,
@@ -65,7 +127,6 @@ class TxItem {
   final String accountName;
   final String memberName;
   final DateTime date;
-  final bool isSharedHouseholdExpense;
   TxItem({
     required this.id,
     required this.description,
@@ -75,7 +136,6 @@ class TxItem {
     required this.accountName,
     required this.memberName,
     DateTime? date,
-    this.isSharedHouseholdExpense = true,
   }) : date = date ?? DateTime.now();
 }
 
@@ -195,7 +255,7 @@ class ActiveSubscriptionInfo {
       );
 }
 
-// Estado global
+// Providers globales
 final authSessionProvider = StateProvider<AuthSession?>((ref) => null);
 final isDarkModeProvider = StateProvider<bool>((ref) => false);
 final navIndexProvider = StateProvider<int>((ref) => 0);
@@ -292,7 +352,7 @@ final transactionsListProvider = StateProvider<List<TxItem>>((ref) => [
       ),
       TxItem(
         id: 't2',
-        description: 'Pago Rápido QR en Panadería y Café (Gasto Hormiga)',
+        description: 'Pago Rápido QR en Panadería y Café',
         amount: 9.50,
         type: 2,
         categoryName: 'Restaurantes, Salidas y Ocio',
@@ -316,7 +376,7 @@ final transactionsListProvider = StateProvider<List<TxItem>>((ref) => [
         amount: 100.00,
         type: 3,
         categoryName: 'Transferencia / Recarga',
-        accountName: 'Cuenta Bancaria Principal → Billetera Digital (Payphone / Deuna)',
+        accountName: 'Cuenta Bancaria Principal → Billetera Digital',
         memberName: 'Admin Hogar',
         date: DateTime.now().subtract(const Duration(days: 2)),
       ),
@@ -437,6 +497,12 @@ class CashApp extends ConsumerWidget {
           brightness: Brightness.light,
         ),
         useMaterial3: true,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.grey.withOpacity(0.04),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -444,6 +510,10 @@ class CashApp extends ConsumerWidget {
           brightness: Brightness.dark,
         ),
         useMaterial3: true,
+        inputDecorationTheme: InputDecorationTheme(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
       home: session == null ? const LoginScreen() : const ResponsiveHomeShell(),
     );
@@ -477,84 +547,92 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ];
 
     return Scaffold(
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    shape: BoxShape.circle,
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.account_balance_wallet,
+                        size: 42, color: Theme.of(context).colorScheme.onPrimaryContainer),
                   ),
-                  child: Icon(Icons.account_balance_wallet,
-                      size: 44, color: Theme.of(context).colorScheme.onPrimaryContainer),
-                ),
-                const SizedBox(height: 16),
-                const Text('Cash · Hogar Pro',
-                    style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-                const Text(
-                    'Escáner Facturas • Tarjetas & Diferidos • Billeteras Digitales • Copiloto 50/30/20',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 13)),
-                const SizedBox(height: 24),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const Text('Iniciar Sesión (JWT)',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _emailCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Correo Electrónico',
-                            prefixIcon: Icon(Icons.email_outlined),
-                            border: OutlineInputBorder(),
+                  const SizedBox(height: 14),
+                  const Text('Cash · Hogar Pro',
+                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  const Text(
+                      'Escáner Facturas • Tarjetas & Diferidos • Billeteras Digitales • Copiloto 50/30/20',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  const SizedBox(height: 22),
+                  Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const Text('Iniciar Sesión (JWT)',
+                              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _emailCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Correo Electrónico',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _passCtrl,
-                          obscureText: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Contraseña',
-                            prefixIcon: Icon(Icons.lock_outline),
-                            border: OutlineInputBorder(),
+                          const SizedBox(height: 12),
+                          TextField(
+                            controller: _passCtrl,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Contraseña',
+                              prefixIcon: Icon(Icons.lock_outline),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 20),
-                        FilledButton.icon(
-                          onPressed: () => _login('Admin Hogar', _emailCtrl.text, 'Admin'),
-                          icon: const Icon(Icons.login),
-                          label: const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Text('Entrar al Hogar'),
+                          const SizedBox(height: 18),
+                          FilledButton.icon(
+                            onPressed: () => _login('Admin Hogar', _emailCtrl.text, 'Admin'),
+                            icon: const Icon(Icons.login),
+                            label: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('Entrar al Hogar'),
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                ...demoUsers.map((u) => Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: CircleAvatar(child: Text(u.$1[0])),
-                        title: Text(u.$1, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Text('${u.$2} • Rol: ${u.$3}'),
-                        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                        onTap: () => _login(u.$1, u.$2, u.$3),
-                      ),
-                    )),
-              ],
+                  const SizedBox(height: 18),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Acceso Rápido 1-Toque (Perfiles Demo):',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                  const SizedBox(height: 8),
+                  ...demoUsers.map((u) => Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: CircleAvatar(child: Text(u.$1[0])),
+                          title: Text(u.$1, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('${u.$2} • ${u.$3}',
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                          onTap: () => _login(u.$1, u.$2, u.$3),
+                        ),
+                      )),
+                ],
+              ),
             ),
           ),
         ),
@@ -564,42 +642,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 // ============================================================================
-// SHELL ADAPTATIVO CON ACCESO A ESCÁNER DE FACTURAS Y 5 MÓDULOS COMERCIALES
+// SHELL ADAPTATIVO
 // ============================================================================
 class ResponsiveHomeShell extends ConsumerWidget {
   const ResponsiveHomeShell({super.key});
 
-  void _openNewTransaction(BuildContext context, bool isWide, {int initialType = 2}) {
-    if (isWide) {
-      showDialog(
-        context: context,
-        builder: (_) => Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: NewTxModal(initialType: initialType),
-          ),
-        ),
-      );
-    } else {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        builder: (_) => NewTxModal(initialType: initialType),
-      );
-    }
+  void _openNewTransaction(BuildContext context, {int initialType = 2}) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: NewTxModal(initialType: initialType),
+    );
   }
 
   void _openInvoiceScanner(BuildContext context) {
-    showDialog(
+    showAdaptiveSheetOrDialog(
       context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
-          child: const SmartInvoiceScannerModal(),
-        ),
-      ),
+      child: const SmartInvoiceScannerModal(),
     );
   }
 
@@ -624,6 +682,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
 
         return Scaffold(
           appBar: AppBar(
+            titleSpacing: 16,
             title: Row(
               children: [
                 const Text('Cash', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -631,13 +690,13 @@ class ResponsiveHomeShell extends ConsumerWidget {
                 InkWell(
                   onTap: () => ref.read(navIndexProvider.notifier).state = 4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: sub.isPro ? Colors.amber.shade700 : Colors.teal.shade700,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      sub.isPro ? '★ PRO ACTIVO' : 'MEJORAR A PRO',
+                      sub.isPro ? '★ PRO' : 'PRO',
                       style: const TextStyle(
                           color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                     ),
@@ -645,7 +704,13 @@ class ResponsiveHomeShell extends ConsumerWidget {
                 ),
                 if (isWide) ...[
                   const SizedBox(width: 14),
-                  Text('•  ${session?.fullName}', style: const TextStyle(fontSize: 13)),
+                  Flexible(
+                    child: Text(
+                      '•  ${session?.fullName} (${session?.role})',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
                 ]
               ],
             ),
@@ -663,20 +728,21 @@ class ResponsiveHomeShell extends ConsumerWidget {
               if (isWide) ...[
                 OutlinedButton.icon(
                   onPressed: () => _openInvoiceScanner(context),
-                  icon: const Icon(Icons.receipt_long),
-                  label: const Text('Escanear Factura XML/OCR'),
+                  icon: const Icon(Icons.receipt_long, size: 18),
+                  label: const Text('Escanear Factura'),
                 ),
                 const SizedBox(width: 8),
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilledButton.icon(
-                    onPressed: () => _openNewTransaction(context, true, initialType: 2),
-                    icon: const Icon(Icons.add),
+                    onPressed: () => _openNewTransaction(context, initialType: 2),
+                    icon: const Icon(Icons.add, size: 18),
                     label: const Text('Registrar'),
                   ),
                 ),
               ],
               IconButton(
+                tooltip: 'Salir',
                 icon: const Icon(Icons.logout),
                 onPressed: () => ref.read(authSessionProvider.notifier).state = null,
               ),
@@ -732,6 +798,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
               ? null
               : NavigationBar(
                   selectedIndex: navIdx,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                   onDestinationSelected: (i) => ref.read(navIndexProvider.notifier).state = i,
                   destinations: const [
                     NavigationDestination(icon: Icon(Icons.dashboard), label: 'Inicio'),
@@ -745,7 +812,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
           floatingActionButton: isWide
               ? null
               : FloatingActionButton.extended(
-                  onPressed: () => _openNewTransaction(context, false),
+                  onPressed: () => _openNewTransaction(context),
                   icon: const Icon(Icons.add),
                   label: const Text('Registrar'),
                 ),
@@ -756,7 +823,7 @@ class ResponsiveHomeShell extends ConsumerWidget {
 }
 
 // ============================================================================
-// MODAL DIFERENCIADOR 1: ESCÁNER INTELIGENTE DE FACTURAS (OCR / XML SRI + IVA 15%)
+// MODAL 1: ESCÁNER INTELIGENTE DE FACTURAS (RESPONSIVO Y A PRUEBA DE TECLADO)
 // ============================================================================
 class SmartInvoiceScannerModal extends ConsumerStatefulWidget {
   const SmartInvoiceScannerModal({super.key});
@@ -796,161 +863,175 @@ class _SmartInvoiceScannerModalState extends ConsumerState<SmartInvoiceScannerMo
       _selectedAccount = accounts.first.name;
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.teal.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.document_scanner, color: Colors.teal),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Escáner de Factura (XML / OCR)',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text('Desglosa IVA 15% y clasifica gastos deducibles',
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const Divider(height: 24),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ActionChip(
+              avatar: const Icon(Icons.shopping_cart, size: 16),
+              label: const Text('Demo: Supermaxi (\$115)'),
+              onPressed: () => setState(() {
+                _merchantCtrl.text = 'Corporación Favorita - Supermaxi';
+                _totalCtrl.text = '115.00';
+              }),
+            ),
+            ActionChip(
+              avatar: const Icon(Icons.local_pharmacy, size: 16),
+              label: const Text('Demo: Fybeca (\$46)'),
+              onPressed: () => setState(() {
+                _merchantCtrl.text = 'Farmacias Fybeca S.A. - Medicinas';
+                _totalCtrl.text = '46.00';
+              }),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _merchantCtrl,
+          onChanged: (_) => setState(() {}),
+          decoration: const InputDecoration(
+            labelText: 'Razón Social / Comercio Detectado',
+            prefixIcon: Icon(Icons.storefront),
+          ),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _totalCtrl,
+          onChanged: (_) => setState(() {}),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Valor Total Factura (USD)',
+            prefixIcon: Icon(Icons.attach_money),
+          ),
+        ),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<String>(
+          value: _selectedAccount,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Pagado con (Cuenta o Billetera)',
+          ),
+          items: accounts
+              .map((a) => DropdownMenuItem(
+                    value: a.name,
+                    child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedAccount = v!),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.teal.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.teal.withOpacity(0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.teal.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.document_scanner, color: Colors.teal),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Importador Inteligente de Factura (XML / OCR)',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    Text('Desglosa IVA 15% y clasifica para Proyección de Gastos Personales',
-                        style: TextStyle(fontSize: 12, color: Colors.grey)),
-                  ],
-                ),
-              ),
+              Text(
+                  'Subtotal: \$${subTotal.toStringAsFixed(2)}  •  IVA (15%): \$${iva15.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 4),
+              Text('Categoría IA: $detectedCategory', style: const TextStyle(fontSize: 12)),
+              Text('✓ $deductibleTag',
+                  style: const TextStyle(
+                      color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
             ],
           ),
-          const Divider(height: 24),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ActionChip(
-                avatar: const Icon(Icons.shopping_cart, size: 16),
-                label: const Text('Demo: Factura Supermaxi (\$115)'),
-                onPressed: () => setState(() {
-                  _merchantCtrl.text = 'Corporación Favorita - Supermaxi';
-                  _totalCtrl.text = '115.00';
-                }),
-              ),
-              ActionChip(
-                avatar: const Icon(Icons.local_pharmacy, size: 16),
-                label: const Text('Demo: Farmacia Fybeca (\$46)'),
-                onPressed: () => setState(() {
-                  _merchantCtrl.text = 'Farmacias Fybeca S.A. - Medicinas';
-                  _totalCtrl.text = '46.00';
-                }),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _merchantCtrl,
-            onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(
-              labelText: 'Razón Social / Comercio Detectado',
-              prefixIcon: Icon(Icons.storefront),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _totalCtrl,
-            onChanged: (_) => setState(() {}),
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Valor Total Factura (USD)',
-              prefixIcon: Icon(Icons.attach_money),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: _selectedAccount,
-            decoration: const InputDecoration(
-              labelText: 'Pagado con (Cuenta o Billetera Digital)',
-              border: OutlineInputBorder(),
-            ),
-            items: accounts
-                .map((a) => DropdownMenuItem(value: a.name, child: Text('${a.name} (${a.type})')))
-                .toList(),
-            onChanged: (v) => setState(() => _selectedAccount = v!),
-          ),
-          const SizedBox(height: 14),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.teal.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.teal.withOpacity(0.4)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                    'Desglose Tributario Automático: Subtotal \$${subTotal.toStringAsFixed(2)}  +  IVA (15%) \$${iva15.toStringAsFixed(2)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text('Categoría IA Asignada: $detectedCategory'),
-                Text('✓ $deductibleTag',
-                    style: const TextStyle(
-                        color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: () {
-              if (total <= 0) return;
-              final list = ref.read(transactionsListProvider);
-              ref.read(transactionsListProvider.notifier).state = [
-                TxItem(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(),
-                  description:
-                      'Factura: ${_merchantCtrl.text} (IVA 15%: \$${iva15.toStringAsFixed(2)})',
-                  amount: total,
-                  type: 2,
-                  categoryName: detectedCategory,
-                  accountName: _selectedAccount,
-                  memberName: session?.fullName ?? 'Hogar',
+        ),
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.pop(context),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                ...list,
-              ];
-
-              ref.read(accountsProvider.notifier).state = accounts.map((acc) {
-                if (acc.name == _selectedAccount) {
-                  return acc.copyWith(balance: acc.balance - total);
-                }
-                return acc;
-              }).toList();
-
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text(
-                        '✓ Factura procesada, categorizada y descontada del saldo automáticamente.')),
-              );
-            },
-            icon: const Icon(Icons.check_circle_outline),
-            label: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('Importar Factura y Registrar Gasto'),
+                child: const Text('Cancelar'),
+              ),
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  if (total <= 0) return;
+                  final list = ref.read(transactionsListProvider);
+                  ref.read(transactionsListProvider.notifier).state = [
+                    TxItem(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      description:
+                          'Factura: ${_merchantCtrl.text} (IVA: \$${iva15.toStringAsFixed(2)})',
+                      amount: total,
+                      type: 2,
+                      categoryName: detectedCategory,
+                      accountName: _selectedAccount,
+                      memberName: session?.fullName ?? 'Hogar',
+                    ),
+                    ...list,
+                  ];
+
+                  ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                    if (acc.name == _selectedAccount) {
+                      return acc.copyWith(balance: acc.balance - total);
+                    }
+                    return acc;
+                  }).toList();
+
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('✓ Factura importada y descontada del saldo.')),
+                  );
+                },
+                icon: const Icon(Icons.check_circle_outline, size: 18),
+                label: const Text('Importar Factura'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
 
 // ============================================================================
-// PESTAÑA 1: DASHBOARD PRINCIPAL
+// PESTAÑA 1: DASHBOARD PRINCIPAL (RESPONSIVO CON PADDING ANTI-FAB)
 // ============================================================================
 class DashboardView extends ConsumerWidget {
   const DashboardView({super.key});
@@ -992,20 +1073,20 @@ class DashboardView extends ConsumerWidget {
     final expenseCategories = categories.where((c) => c.type == 2).toList();
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
         Card(
           elevation: 0,
           color: Theme.of(context).colorScheme.primaryContainer,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
-                  spacing: 24,
-                  runSpacing: 16,
+                  spacing: 16,
+                  runSpacing: 12,
                   alignment: WrapAlignment.spaceBetween,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
@@ -1013,48 +1094,53 @@ class DashboardView extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Patrimonio Total (${accounts.length} Opciones de Saldo)',
-                            style: const TextStyle(fontSize: 14)),
-                        const SizedBox(height: 6),
+                            style: const TextStyle(fontSize: 13)),
+                        const SizedBox(height: 4),
                         Text(currency.format(totalBalance),
-                            style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
+                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
                         Wrap(
-                          spacing: 16,
+                          spacing: 14,
+                          runSpacing: 4,
                           children: [
-                            Text('▲ Ingresos Mes: ${currency.format(income)}',
+                            Text('▲ Ingresos: ${currency.format(income)}',
                                 style: TextStyle(
-                                    color: Colors.green.shade800, fontWeight: FontWeight.bold)),
-                            Text('▼ Gastos Mes: ${currency.format(expense)}',
+                                    color: Colors.green.shade800,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                            Text('▼ Gastos: ${currency.format(expense)}',
                                 style: TextStyle(
-                                    color: Colors.red.shade800, fontWeight: FontWeight.bold)),
+                                    color: Colors.red.shade800,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
                           ],
                         ),
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
                         children: [
                           const Text('Salud Financiera',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                           Text('$healthScore / 100',
                               style: const TextStyle(
-                                  fontSize: 24, fontWeight: FontWeight.bold, color: Colors.teal)),
+                                  fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
                           Text('Ahorro: ${savingsRate.toStringAsFixed(1)}%',
-                              style: const TextStyle(fontSize: 12)),
+                              style: const TextStyle(fontSize: 11)),
                         ],
                       ),
                     ),
                   ],
                 ),
-                const Divider(height: 28),
+                const Divider(height: 24),
                 Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     _BalancePill(
                       icon: Icons.account_balance,
@@ -1063,7 +1149,7 @@ class DashboardView extends ConsumerWidget {
                     ),
                     _BalancePill(
                       icon: Icons.qr_code_2,
-                      label: 'Saldo Billetera Digital',
+                      label: 'Billetera Digital',
                       amount: currency.format(digitalWalletBalance),
                       highlight: true,
                     ),
@@ -1080,9 +1166,21 @@ class DashboardView extends ConsumerWidget {
         ),
         const SizedBox(height: 20),
 
-        const Text('Presupuestos por Categoría de Gasto',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Expanded(
+              child: Text('Presupuestos por Categoría',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            ),
+            TextButton.icon(
+              onPressed: () => ref.read(navIndexProvider.notifier).state = 1,
+              icon: const Icon(Icons.tune, size: 16),
+              label: const Text('Configurar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
         ...expenseCategories.map((c) {
           final spent = allTx
               .where((t) => t.type == 2 && t.categoryName == c.name)
@@ -1091,21 +1189,23 @@ class DashboardView extends ConsumerWidget {
               c.monthlyBudget > 0 ? (spent / c.monthlyBudget).clamp(0.0, 1.0) : 0.0;
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
-            child: ListTile(
-              title: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                      child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                  Text('${(progress * 100).toInt()}%',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: progress > 0.85 ? Colors.red : Colors.teal)),
-                ],
-              ),
-              subtitle: Column(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                          child: Text(c.name,
+                              style: const TextStyle(fontWeight: FontWeight.bold))),
+                      Text('${(progress * 100).toInt()}%',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: progress > 0.85 ? Colors.red : Colors.teal)),
+                    ],
+                  ),
                   const SizedBox(height: 6),
                   LinearProgressIndicator(
                     value: progress,
@@ -1113,21 +1213,24 @@ class DashboardView extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(4),
                     color: progress > 0.85 ? Colors.red : null,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
-                      '${currency.format(spent)} de ${currency.format(c.monthlyBudget)} • ${c.bucket503020}'),
+                    '${currency.format(spent)} de ${currency.format(c.monthlyBudget)} • ${c.bucket503020}',
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                 ],
               ),
             ),
           );
         }),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
         const Text('Filtro por Integrante del Hogar',
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
+          runSpacing: 8,
           children: [
             ChoiceChip(
               label: Text('Todos (${currency.format(expense)})'),
@@ -1150,11 +1253,10 @@ class DashboardView extends ConsumerWidget {
 
         TextField(
           onChanged: (v) => ref.read(searchQueryProvider.notifier).state = v,
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'Buscar por descripción, categoría o billetera...',
-            prefixIcon: const Icon(Icons.search),
+            prefixIcon: Icon(Icons.search),
             isDense: true,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
         const SizedBox(height: 12),
@@ -1176,10 +1278,18 @@ class DashboardView extends ConsumerWidget {
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: bgColor,
-                child: Icon(iconData, color: fgColor),
+                child: Icon(iconData, color: fgColor, size: 20),
               ),
-              title: Text(t.description, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('${t.categoryName} • ${t.accountName} • Por: ${t.memberName}'),
+              title: Text(t.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(
+                '${t.categoryName} • ${t.accountName} • ${t.memberName}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12),
+              ),
               trailing: Text(
                 '${isTransfer ? '⇄ ' : (isInc ? '+' : '-')}${currency.format(t.amount)}',
                 style: TextStyle(fontWeight: FontWeight.bold, color: fgColor),
@@ -1208,7 +1318,7 @@ class _BalancePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: highlight
             ? Colors.teal.shade800
@@ -1218,7 +1328,7 @@ class _BalancePill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 20, color: highlight ? Colors.white : Colors.teal),
+          Icon(icon, size: 18, color: highlight ? Colors.white : Colors.teal),
           const SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1229,7 +1339,7 @@ class _BalancePill extends StatelessWidget {
               Text(amount,
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 15,
+                      fontSize: 14,
                       color: highlight ? Colors.white : null)),
             ],
           ),
@@ -1240,103 +1350,23 @@ class _BalancePill extends StatelessWidget {
 }
 
 // ============================================================================
-// PESTAÑA 2: PARAMETRIZACIÓN DE CUENTAS, BILLETERAS DIGITALES Y RUBROS
+// PESTAÑA 2: PARAMETRIZACIÓN DE CUENTAS, BILLETERAS Y RUBROS (100% RESPONSIVO)
 // ============================================================================
 class CatalogsSettingsView extends ConsumerWidget {
   const CatalogsSettingsView({super.key});
 
-  void _showAddAccountDialog(BuildContext context, WidgetRef ref,
+  void _openAddAccountModal(BuildContext context, WidgetRef ref,
       {String defaultType = 'Billetera Digital'}) {
-    final nameCtrl = TextEditingController();
-    final balanceCtrl = TextEditingController(text: '0');
-    String selectedType = defaultType;
-
-    showDialog(
+    showAdaptiveSheetOrDialog(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: const Text('Nueva Cuenta o Billetera Digital'),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                DropdownButtonFormField<String>(
-                  value: selectedType,
-                  decoration: const InputDecoration(
-                    labelText: 'Opción de Saldo / Tipo de Cuenta',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    'Billetera Digital',
-                    'Banco',
-                    'Efectivo',
-                    'Tarjeta de Crédito',
-                    'Ahorro',
-                    'Cooperativa'
-                  ]
-                      .map((t) => DropdownMenuItem(
-                            value: t,
-                            child: Row(
-                              children: [
-                                Icon(getAccountTypeIcon(t), size: 18, color: Colors.teal),
-                                const SizedBox(width: 8),
-                                Text(t),
-                              ],
-                            ),
-                          ))
-                      .toList(),
-                  onChanged: (v) => setState(() => selectedType = v!),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(
-                    labelText: selectedType == 'Billetera Digital'
-                        ? 'Nombre de la Billetera Digital'
-                        : 'Nombre de la Cuenta',
-                    hintText: selectedType == 'Billetera Digital'
-                        ? 'Ej. Saldo Payphone, Deuna, Peigo...'
-                        : 'Ej. Banco Pichincha, Produbanco...',
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: balanceCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Saldo Disponible Inicial (USD)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar')),
-            FilledButton(
-              onPressed: () {
-                if (nameCtrl.text.trim().isEmpty) return;
-                final bal = double.tryParse(balanceCtrl.text) ?? 0.0;
-                final current = ref.read(accountsProvider);
-                ref.read(accountsProvider.notifier).state = [
-                  ...current,
-                  AccountModel(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: nameCtrl.text.trim(),
-                    type: selectedType,
-                    balance: bal,
-                  ),
-                ];
-                Navigator.pop(ctx);
-              },
-              child: const Text('Guardar Opción de Saldo'),
-            ),
-          ],
-        ),
-      ),
+      child: _AddAccountForm(defaultType: defaultType),
+    );
+  }
+
+  void _openAddCategoryModal(BuildContext context, WidgetRef ref, {int defaultType = 2}) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: _AddCategoryForm(defaultType: defaultType),
     );
   }
 
@@ -1344,40 +1374,42 @@ class CatalogsSettingsView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accounts = ref.watch(accountsProvider);
     final categories = ref.watch(categoriesProvider);
+    final expenseCats = categories.where((c) => c.type == 2).toList();
+    final incomeCats = categories.where((c) => c.type == 1).toList();
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      // Padding inferior de 104px para que el FAB (+ Registrar) nunca tape las tarjetas
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        const Text('Parametrización de Cuentas, Billeteras Digitales y Rubros',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+        const Text('Parametrización de Cuentas y Billeteras Digitales',
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
+        const Text(
+            'Administra tus opciones de saldo (Bancos, Billeteras Digitales, Efectivo) y las categorías de ingresos/gastos.',
+            style: TextStyle(color: Colors.grey, fontSize: 13)),
         const SizedBox(height: 16),
+
+        // Botones de acción responsivos
         Wrap(
-          spacing: 12,
+          spacing: 10,
           runSpacing: 10,
-          alignment: WrapAlignment.spaceBetween,
           children: [
-            const Text('1. Cuentas Bancarias y Billeteras Digitales',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            Wrap(
-              spacing: 8,
-              children: [
-                FilledButton.tonalIcon(
-                  onPressed: () =>
-                      _showAddAccountDialog(context, ref, defaultType: 'Billetera Digital'),
-                  icon: const Icon(Icons.qr_code_2),
-                  label: const Text('+ Billetera Digital'),
-                ),
-                FilledButton.icon(
-                  onPressed: () => _showAddAccountDialog(context, ref, defaultType: 'Banco'),
-                  icon: const Icon(Icons.account_balance),
-                  label: const Text('+ Cuenta Bancaria'),
-                ),
-              ],
+            FilledButton.tonalIcon(
+              onPressed: () =>
+                  _openAddAccountModal(context, ref, defaultType: 'Billetera Digital'),
+              icon: const Icon(Icons.qr_code_2, size: 18),
+              label: const Text('+ Billetera Digital'),
+            ),
+            FilledButton.icon(
+              onPressed: () => _openAddAccountModal(context, ref, defaultType: 'Banco'),
+              icon: const Icon(Icons.account_balance, size: 18),
+              label: const Text('+ Cuenta Bancaria'),
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
+
         ...accounts.map((a) {
           final isDigital = a.type == 'Billetera Digital';
           return Card(
@@ -1386,26 +1418,100 @@ class CatalogsSettingsView extends ConsumerWidget {
               leading: CircleAvatar(
                 backgroundColor: isDigital ? Colors.teal : null,
                 foregroundColor: isDigital ? Colors.white : null,
-                child: Icon(getAccountTypeIcon(a.type)),
+                child: Icon(getAccountTypeIcon(a.type), size: 20),
               ),
               title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Tipo: ${a.type} • Saldo: ${currency.format(a.balance)}'),
+              subtitle: Text('Opción de Saldo: ${a.type} • ${currency.format(a.balance)}'),
+              trailing: IconButton(
+                tooltip: 'Eliminar opción de saldo',
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: accounts.length <= 1
+                    ? null
+                    : () {
+                        ref.read(accountsProvider.notifier).state =
+                            accounts.where((item) => item.id != a.id).toList();
+                      },
+              ),
             ),
           );
         }),
-        const SizedBox(height: 20),
-        const Text('2. Categorías y Clasificación 50/30/20',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 24),
+
+        // SECCIÓN 2: RUBROS DE GASTOS
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('Rubros de Gasto y Presupuesto Mensual',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _openAddCategoryModal(context, ref, defaultType: 2),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Rubro de Gasto'),
+            ),
+          ],
+        ),
         const SizedBox(height: 10),
-        ...categories.map((c) => Card(
+        ...expenseCats.map((c) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
-                leading: Icon(c.type == 1 ? Icons.trending_up : Icons.trending_down,
-                    color: c.type == 1 ? Colors.green : Colors.red),
+                leading: CircleAvatar(
+                  backgroundColor: Colors.red.shade100,
+                  child: Icon(Icons.trending_down, color: Colors.red.shade800, size: 20),
+                ),
                 title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(c.type == 1
-                    ? 'Categoría de Ingreso'
-                    : 'Tope: ${currency.format(c.monthlyBudget)} • ${c.bucket503020}'),
+                subtitle: Text(
+                    'Tope Mensual: ${currency.format(c.monthlyBudget)} • ${c.bucket503020}'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: expenseCats.length <= 1
+                      ? null
+                      : () {
+                          ref.read(categoriesProvider.notifier).state =
+                              categories.where((item) => item.id != c.id).toList();
+                        },
+                ),
+              ),
+            )),
+        const SizedBox(height: 24),
+
+        // SECCIÓN 3: RUBROS DE INGRESO
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('Rubros de Ingresos Familiares',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _openAddCategoryModal(context, ref, defaultType: 1),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('+ Rubro de Ingreso'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...incomeCats.map((c) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: Colors.green.shade100,
+                  child: Icon(Icons.trending_up, color: Colors.green.shade800, size: 20),
+                ),
+                title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Categoría de Ingreso Activa'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: incomeCats.length <= 1
+                      ? null
+                      : () {
+                          ref.read(categoriesProvider.notifier).state =
+                              categories.where((item) => item.id != c.id).toList();
+                        },
+                ),
               ),
             )),
       ],
@@ -1413,8 +1519,266 @@ class CatalogsSettingsView extends ConsumerWidget {
   }
 }
 
+// Formulario independiente y responsivo para Nueva Cuenta / Billetera Digital (Sin solapamiento con teclado)
+class _AddAccountForm extends ConsumerStatefulWidget {
+  final String defaultType;
+  const _AddAccountForm({required this.defaultType});
+
+  @override
+  ConsumerState<_AddAccountForm> createState() => _AddAccountFormState();
+}
+
+class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
+  final _nameCtrl = TextEditingController();
+  final _balanceCtrl = TextEditingController(text: '0');
+  late String _selectedType;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.defaultType;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDigital = _selectedType == 'Billetera Digital';
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Nueva Cuenta o Billetera Digital',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Configura una nueva opción de saldo para registrar tus ingresos, gastos o recargas.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
+        const SizedBox(height: 18),
+        DropdownButtonFormField<String>(
+          value: _selectedType,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Opción de Saldo / Tipo de Cuenta',
+          ),
+          items: [
+            'Billetera Digital',
+            'Banco',
+            'Efectivo',
+            'Tarjeta de Crédito',
+            'Ahorro',
+            'Cooperativa'
+          ]
+              .map((t) => DropdownMenuItem(
+                    value: t,
+                    child: Row(
+                      children: [
+                        Icon(getAccountTypeIcon(t), size: 18, color: Colors.teal),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(t, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedType = v!),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _nameCtrl,
+          textInputAction: TextInputAction.next,
+          decoration: InputDecoration(
+            labelText:
+                isDigital ? 'Nombre de la Billetera Digital' : 'Nombre de la Cuenta',
+            hintText: isDigital
+                ? 'Ej. Saldo Payphone, Deuna, Peigo...'
+                : 'Ej. Banco Pichincha, Produbanco...',
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _balanceCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Saldo Disponible Inicial (USD)',
+            prefixIcon: Icon(Icons.attach_money),
+          ),
+        ),
+        const SizedBox(height: 24),
+        // Fila de botones bien espaciada que jamás se monta sobre el TextField
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  if (_nameCtrl.text.trim().isEmpty) return;
+                  final bal = double.tryParse(_balanceCtrl.text) ?? 0.0;
+                  final current = ref.read(accountsProvider);
+                  ref.read(accountsProvider.notifier).state = [
+                    ...current,
+                    AccountModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      name: _nameCtrl.text.trim(),
+                      type: _selectedType,
+                      balance: bal,
+                    ),
+                  ];
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('✓ ${_nameCtrl.text.trim()} agregada con éxito.')),
+                  );
+                },
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Guardar Saldo'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AddCategoryForm extends ConsumerStatefulWidget {
+  final int defaultType;
+  const _AddCategoryForm({required this.defaultType});
+
+  @override
+  ConsumerState<_AddCategoryForm> createState() => _AddCategoryFormState();
+}
+
+class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
+  final _nameCtrl = TextEditingController();
+  late final TextEditingController _budgetCtrl;
+  late int _selectedType;
+  String _selectedBucket = 'Necesidades (50%)';
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = widget.defaultType;
+    _budgetCtrl = TextEditingController(text: widget.defaultType == 2 ? '200' : '0');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Parametrizar Rubro de Ingreso / Gasto',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 2, label: Text('Gasto'), icon: Icon(Icons.trending_down)),
+            ButtonSegment(value: 1, label: Text('Ingreso'), icon: Icon(Icons.trending_up)),
+          ],
+          selected: {_selectedType},
+          onSelectionChanged: (s) => setState(() => _selectedType = s.first),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _nameCtrl,
+          decoration: InputDecoration(
+            labelText:
+                _selectedType == 2 ? 'Nombre del Rubro de Gasto' : 'Nombre del Rubro de Ingreso',
+            hintText: _selectedType == 2
+                ? 'Ej. Mascotas, Gimnasio, Seguros...'
+                : 'Ej. Arriendo, Dividendos, Honorarios...',
+          ),
+        ),
+        if (_selectedType == 2) ...[
+          const SizedBox(height: 16),
+          TextField(
+            controller: _budgetCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+              labelText: 'Presupuesto Mensual Tope (USD)',
+              prefixIcon: Icon(Icons.attach_money),
+            ),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String>(
+            value: _selectedBucket,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Clasificación Regla 50/30/20',
+            ),
+            items: [
+              'Necesidades (50%)',
+              'Deseos / Estilo de Vida (30%)',
+              'Ahorro / Deudas (20%)',
+            ].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+            onChanged: (v) => setState(() => _selectedBucket = v!),
+          ),
+        ],
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  if (_nameCtrl.text.trim().isEmpty) return;
+                  final budget =
+                      _selectedType == 2 ? (double.tryParse(_budgetCtrl.text) ?? 0.0) : 0.0;
+                  final current = ref.read(categoriesProvider);
+                  ref.read(categoriesProvider.notifier).state = [
+                    ...current,
+                    CategoryModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      name: _nameCtrl.text.trim(),
+                      type: _selectedType,
+                      monthlyBudget: budget,
+                      bucket503020: _selectedBucket,
+                    ),
+                  ];
+                  Navigator.pop(context);
+                },
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Guardar Rubro'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 // ============================================================================
-// PESTAÑA 3 (NUEVA): COPILOTO IA REGLA 50/30/20 + SPLIT FAMILIAR + DETECTOR GASTOS HORMIGA + CSV
+// PESTAÑA 3: COPILOTO IA REGLA 50/30/20 + SPLIT FAMILIAR + CSV
 // ============================================================================
 class Copiloto503020AndExportView extends ConsumerWidget {
   const Copiloto503020AndExportView({super.key});
@@ -1441,7 +1805,6 @@ class Copiloto503020AndExportView extends ConsumerWidget {
     final expenses = allTx.where((t) => t.type == 2).toList();
     final totalExpense = expenses.fold(0.0, (s, t) => s + t.amount);
 
-    // Cálculo Regla 50/30/20
     double needsSpent = 0;
     double wantsSpent = 0;
     for (final e in expenses) {
@@ -1454,35 +1817,34 @@ class Copiloto503020AndExportView extends ConsumerWidget {
     }
     final savingsActual = (income - totalExpense).clamp(0.0, double.infinity);
 
-    // Detector de Gastos Hormiga (compras <= $15)
     final microExpenses = expenses.where((e) => e.amount <= 15.0).toList();
     final microTotal = microExpenses.fold(0.0, (s, e) => s + e.amount);
 
-    // División de Gastos Familiar (Split Equitativo entre Admin Hogar y Pareja)
     final adminPaid = expenses
         .where((e) => e.memberName == 'Admin Hogar')
-        .fold(0.0, (s, e) => s + e.amount);
+        .fold(0.0, (s, e) => s + t.amount);
     final partnerPaid =
         expenses.where((e) => e.memberName == 'Pareja').fold(0.0, (s, e) => s + e.amount);
     final fairShare = (adminPaid + partnerPaid) / 2.0;
     final splitDiff = (adminPaid - fairShare).abs();
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Copiloto Financiero 50/30/20 & Split Familiar',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                  Text('Diagnóstico inteligente de presupuesto, gastos hormiga y equidad familiar',
-                      style: TextStyle(color: Colors.grey)),
-                ],
-              ),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Copiloto 50/30/20 & Split Familiar',
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+                Text('Diagnóstico inteligente de presupuesto y equidad del hogar',
+                    style: TextStyle(color: Colors.grey, fontSize: 13)),
+              ],
             ),
             FilledButton.icon(
               onPressed: () {
@@ -1493,31 +1855,32 @@ class Copiloto503020AndExportView extends ConsumerWidget {
                       content: Text('✓ Sábana contable CSV copiada para Excel / Google Sheets.')),
                 );
               },
-              icon: const Icon(Icons.download),
+              icon: const Icon(Icons.download, size: 18),
               label: const Text('Exportar Excel / CSV'),
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 18),
 
-        // 1. Diagnóstico Regla 50 / 30 / 20
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Row(
                   children: [
-                    Icon(Icons.auto_Graph, color: Colors.teal),
+                    Icon(Icons.auto_graph, color: Colors.teal),
                     SizedBox(width: 8),
-                    Text('Diagnóstico Regla 50% Necesidades / 30% Deseos / 20% Ahorro',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text('Diagnóstico Regla 50% Necesidades / 30% Deseos / 20% Ahorro',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 _RuleBar(
-                  title: 'Necesidades Básicas (Meta ideal <= 50% de tus ingresos)',
+                  title: 'Necesidades Básicas (Meta <= 50%)',
                   amount: currency.format(needsSpent),
                   target: currency.format(income * 0.50),
                   ratio: income > 0 ? (needsSpent / (income * 0.50)).clamp(0.0, 1.0) : 0.0,
@@ -1525,7 +1888,7 @@ class Copiloto503020AndExportView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _RuleBar(
-                  title: 'Estilo de Vida, Ocio y Gastos Hormiga (Meta <= 30%)',
+                  title: 'Estilo de Vida y Ocio (Meta <= 30%)',
                   amount: currency.format(wantsSpent),
                   target: currency.format(income * 0.30),
                   ratio: income > 0 ? (wantsSpent / (income * 0.30)).clamp(0.0, 1.0) : 0.0,
@@ -1533,7 +1896,7 @@ class Copiloto503020AndExportView extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
                 _RuleBar(
-                  title: 'Ahorro Neto y Pago de Deudas (Meta mínima >= 20%)',
+                  title: 'Ahorro Neto Familiar (Meta >= 20%)',
                   amount: currency.format(savingsActual),
                   target: currency.format(income * 0.20),
                   ratio: income > 0 ? (savingsActual / (income * 0.20)).clamp(0.0, 1.0) : 0.0,
@@ -1545,10 +1908,9 @@ class Copiloto503020AndExportView extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
 
-        // 2. División y Equidad de Gastos en Pareja / Familia (Splitwise Integrado)
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1556,8 +1918,10 @@ class Copiloto503020AndExportView extends ConsumerWidget {
                   children: [
                     Icon(Icons.balance, color: Colors.indigo),
                     SizedBox(width: 8),
-                    Text('Liquidación y Equidad de Gastos del Hogar (Split 50/50)',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text('Equidad de Gastos del Hogar (Split 50/50)',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1565,7 +1929,7 @@ class Copiloto503020AndExportView extends ConsumerWidget {
                     '• Pagado por Admin Hogar: ${currency.format(adminPaid)}\n'
                     '• Pagado por Pareja: ${currency.format(partnerPaid)}\n'
                     '• Cuota equitativa por miembro (50%): ${currency.format(fairShare)}',
-                    style: const TextStyle(height: 1.5)),
+                    style: const TextStyle(height: 1.5, fontSize: 13)),
                 const SizedBox(height: 10),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1575,9 +1939,9 @@ class Copiloto503020AndExportView extends ConsumerWidget {
                   ),
                   child: Text(
                     adminPaid >= partnerPaid
-                        ? '⚖️ Para quedar a mano este mes: Pareja debe transferir ${currency.format(splitDiff)} a la Billetera Digital de Admin Hogar.'
-                        : '⚖️ Para quedar a mano este mes: Admin Hogar debe transferir ${currency.format(splitDiff)} a Pareja.',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                        ? '⚖️ Compensación sugerida: Pareja transfiere ${currency.format(splitDiff)} a la Billetera Digital de Admin Hogar.'
+                        : '⚖️ Compensación sugerida: Admin Hogar transfiere ${currency.format(splitDiff)} a Pareja.',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
                 ),
               ],
@@ -1586,7 +1950,6 @@ class Copiloto503020AndExportView extends ConsumerWidget {
         ),
         const SizedBox(height: 16),
 
-        // 3. Detector de Gastos Hormiga
         Card(
           child: ListTile(
             leading: CircleAvatar(
@@ -1596,7 +1959,7 @@ class Copiloto503020AndExportView extends ConsumerWidget {
             title: const Text('Detector de "Gastos Hormiga" (Compras <= \$15)',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text(
-                'Se detectaron ${microExpenses.length} micro-gastos este mes por ${currency.format(microTotal)}. Proyección de fuga anual: ${currency.format(microTotal * 12)}.'),
+                '${microExpenses.length} micro-gastos detectados este mes (${currency.format(microTotal)}). Fuga anual proyectada: ${currency.format(microTotal * 12)}.'),
           ),
         ),
       ],
@@ -1624,17 +1987,18 @@ class _RuleBar extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: 8,
           children: [
-            Expanded(child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold))),
-            Text('$amount / $target'),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('$amount / $target', style: const TextStyle(fontSize: 12)),
           ],
         ),
         const SizedBox(height: 6),
         LinearProgressIndicator(
           value: ratio,
-          minHeight: 9,
+          minHeight: 8,
           color: color,
           borderRadius: BorderRadius.circular(5),
         ),
@@ -1644,7 +2008,7 @@ class _RuleBar extends StatelessWidget {
 }
 
 // ============================================================================
-// PESTAÑA 4 (NUEVA): TARJETAS DE CRÉDITO, DIFERIDOS (CUOTAS), METAS Y PAGOS FIJOS
+// PESTAÑA 4: TARJETAS DE CRÉDITO, DIFERIDOS, METAS Y PAGOS FIJOS (RESPONSIVO)
 // ============================================================================
 class CreditCardsGoalsAndRecurringView extends ConsumerWidget {
   const CreditCardsGoalsAndRecurringView({super.key});
@@ -1657,44 +2021,55 @@ class CreditCardsGoalsAndRecurringView extends ConsumerWidget {
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        // 1. Control de Tarjetas de Crédito y Compras Diferidas (Cuotas)
-        const Text('Tarjetas de Crédito: Control de Diferidos y Fechas de Corte',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const Text('Seguimiento de compras en cuotas (3, 6, 12 meses) y saldo por vencer',
-            style: TextStyle(color: Colors.grey)),
+        const Text('Tarjetas de Crédito y Control de Diferidos',
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+        const Text('Seguimiento de compras en cuotas y fechas de corte',
+            style: TextStyle(color: Colors.grey, fontSize: 13)),
         const SizedBox(height: 12),
         ...installments.map((inst) {
           final progress = (inst.paidMonths / inst.totalMonths).clamp(0.0, 1.0);
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Text('${inst.cardName} • ${inst.description}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
-                      Expanded(
-                        child: Text('${inst.cardName} • ${inst.description}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Chip(
+                        visualDensity: VisualDensity.compact,
+                        label: Text(
+                            'Corte: Día ${inst.cutOffDay} | Pago: Día ${inst.paymentDueDay}',
+                            style: const TextStyle(fontSize: 11)),
                       ),
                       Chip(
-                        label: Text(
-                            'Corte: Día ${inst.cutOffDay} | Pago: Día ${inst.paymentDueDay}'),
+                        visualDensity: VisualDensity.compact,
+                        label: Text('Cuota: ${currency.format(inst.monthlyQuota)}/mes',
+                            style: const TextStyle(fontSize: 11)),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   LinearProgressIndicator(value: progress, minHeight: 8),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text(
-                          'Cuota Mensual: ${currency.format(inst.monthlyQuota)}  •  Pagadas: ${inst.paidMonths}/${inst.totalMonths} cuotas  •  Saldo Restante: ${currency.format(inst.remainingBalance)}'),
+                        'Pagadas: ${inst.paidMonths}/${inst.totalMonths} • Restante: ${currency.format(inst.remainingBalance)}',
+                        style: const TextStyle(fontSize: 13),
+                      ),
                       if (inst.paidMonths < inst.totalMonths)
                         FilledButton.tonal(
                           onPressed: () {
@@ -1713,28 +2088,30 @@ class CreditCardsGoalsAndRecurringView extends ConsumerWidget {
             ),
           );
         }),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
-        // 2. Metas de Ahorro Familiar
         const Text('Metas de Ahorro Familiar',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         ...goals.map((g) {
           final pct = (g.currentAmount / g.targetAmount).clamp(0.0, 1.0);
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: Padding(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(g.title,
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  LinearProgressIndicator(value: pct, minHeight: 10),
+                  LinearProgressIndicator(value: pct, minHeight: 9),
                   const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Text('${currency.format(g.currentAmount)} de ${currency.format(g.targetAmount)}'),
                       FilledButton.tonal(
@@ -1754,11 +2131,10 @@ class CreditCardsGoalsAndRecurringView extends ConsumerWidget {
             ),
           );
         }),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
 
-        // 3. Pagos Fijos Mensuales
         const Text('Pagos Fijos y Suscripciones',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         ...bills.map((b) => Card(
               margin: const EdgeInsets.only(bottom: 10),
@@ -1769,14 +2145,14 @@ class CreditCardsGoalsAndRecurringView extends ConsumerWidget {
                 subtitle: Text('Vence el día ${b.dueDay} • ${currency.format(b.amount)}'),
                 trailing: b.isPaid
                     ? const Chip(label: Text('Pagado'))
-                    : FilledButton(
+                    : FilledButton.tonal(
                         onPressed: () {
                           ref.read(recurringBillsProvider.notifier).state = bills
                               .map((item) =>
                                   item.id == b.id ? item.copyWith(isPaid: true) : item)
                               .toList();
                         },
-                        child: const Text('Registrar Pago'),
+                        child: const Text('Pagar'),
                       ),
               ),
             )),
@@ -1798,32 +2174,32 @@ class MonetizationGatewaysView extends ConsumerWidget {
     final isAnnual = sub.selectedBillingCycle == 'annual';
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
         const Text('Pasarelas de Monetización: Payphone & RevenueCat',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 14),
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
         SegmentedButton<String>(
           segments: const [
             ButtonSegment(
               value: 'WEB_PAYPHONE',
-              icon: Icon(Icons.language),
-              label: Text('Canal Web: Payphone V2'),
+              icon: Icon(Icons.language, size: 18),
+              label: Text('Payphone Web'),
             ),
             ButtonSegment(
               value: 'MOBILE_REVENUECAT',
-              icon: Icon(Icons.phone_iphone),
-              label: Text('Canal Móvil: RevenueCat'),
+              icon: Icon(Icons.phone_iphone, size: 18),
+              label: Text('RevenueCat App'),
             ),
           ],
           selected: {previewMode},
           onSelectionChanged: (s) => ref.read(gatewayPreviewModeProvider.notifier).state = s.first,
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         Card(
           child: ListTile(
             leading: Icon(sub.isPro ? Icons.verified : Icons.lock_outline,
-                color: sub.isPro ? Colors.teal : Colors.grey, size: 32),
+                color: sub.isPro ? Colors.teal : Colors.grey, size: 30),
             title: Text(sub.planName, style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text('Pasarela: ${sub.gateway} • Auth: ${sub.lastAuthCode}'),
             trailing: Switch(
@@ -1838,7 +2214,7 @@ class MonetizationGatewaysView extends ConsumerWidget {
         const SizedBox(height: 16),
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1846,13 +2222,14 @@ class MonetizationGatewaysView extends ConsumerWidget {
                   previewMode == 'WEB_PAYPHONE'
                       ? 'Checkout Web con Payphone Business (Confirmación V2)'
                       : 'Suscripción Nativa con RevenueCat (Google Play / App Store)',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   previewMode == 'WEB_PAYPHONE'
                       ? 'Acepta tarjetas Visa, Mastercard, Diners y Saldo de Billetera Payphone confirmando en /api/button/V2/Confirm.'
                       : 'Desbloquea el Entitlement "${BillingConfig.entitlementId}" sincronizado vía Webhook con PostgreSQL.',
+                  style: const TextStyle(fontSize: 13),
                 ),
                 const SizedBox(height: 16),
                 FilledButton.icon(
@@ -1886,7 +2263,7 @@ class MonetizationGatewaysView extends ConsumerWidget {
 }
 
 // ============================================================================
-// MODAL DE REGISTRO: GASTO (2) | INGRESO (1) | RECARGAR BILLETERA / TRANSFERIR (3)
+// MODAL DE REGISTRO DE MOVIMIENTOS (RESPONSIVO Y A PRUEBA DE TECLADO)
 // ============================================================================
 class NewTxModal extends ConsumerStatefulWidget {
   final int initialType;
@@ -1933,161 +2310,174 @@ class _NewTxModalState extends ConsumerState<NewTxModal> {
       _selectedCategory = filteredCategories.first.name;
     }
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            _type == 3 ? 'Recargar Billetera Digital / Transferir' : 'Registrar Movimiento',
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          _type == 3 ? 'Recargar Billetera / Transferir' : 'Registrar Movimiento',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 14),
+        SegmentedButton<int>(
+          segments: const [
+            ButtonSegment(value: 2, label: Text('Gasto')),
+            ButtonSegment(value: 1, label: Text('Ingreso')),
+            ButtonSegment(value: 3, label: Text('Transferir')),
+          ],
+          selected: {_type},
+          onSelectionChanged: (v) => setState(() => _type = v.first),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _amountCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Monto (USD)',
+            prefixIcon: Icon(Icons.attach_money),
           ),
-          const SizedBox(height: 12),
-          SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(
-                  value: 2, label: Text('Gasto'), icon: Icon(Icons.remove_circle_outline)),
-              ButtonSegment(
-                  value: 1, label: Text('Ingreso'), icon: Icon(Icons.add_circle_outline)),
-              ButtonSegment(
-                  value: 3, label: Text('Recargar / Transf.'), icon: Icon(Icons.swap_horiz)),
-            ],
-            selected: {_type},
-            onSelectionChanged: (v) => setState(() => _type = v.first),
+        ),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _descCtrl,
+          decoration: InputDecoration(
+            labelText: _type == 3
+                ? 'Concepto (Ej. Recarga a Billetera Digital)'
+                : 'Descripción del movimiento',
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _amountCtrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration:
-                const InputDecoration(labelText: 'Monto (USD)', border: OutlineInputBorder()),
+        ),
+        const SizedBox(height: 14),
+        DropdownButtonFormField<String>(
+          value: _selectedAccount,
+          isExpanded: true,
+          decoration: InputDecoration(
+            labelText: _type == 3 ? 'Cuenta Origen' : 'Opción de Saldo / Cuenta',
           ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _descCtrl,
-            decoration: InputDecoration(
-              labelText: _type == 3
-                  ? 'Concepto (Ej. Recarga a Billetera Digital)'
-                  : 'Descripción',
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
+          items: accounts
+              .map((a) => DropdownMenuItem(
+                    value: a.name,
+                    child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
+                  ))
+              .toList(),
+          onChanged: (v) => setState(() => _selectedAccount = v),
+        ),
+        const SizedBox(height: 14),
+        if (_type == 3)
           DropdownButtonFormField<String>(
-            value: _selectedAccount,
-            decoration: InputDecoration(
-              labelText: _type == 3
-                  ? 'Cuenta Origen (De donde sale el saldo)'
-                  : 'Opción de Saldo / Cuenta',
-              border: const OutlineInputBorder(),
+            value: _destinationAccount,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              labelText: 'Billetera o Cuenta Destino',
             ),
             items: accounts
                 .map((a) => DropdownMenuItem(
                       value: a.name,
-                      child: Text('${a.name} (${a.type})'),
+                      child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
-            onChanged: (v) => setState(() => _selectedAccount = v),
-          ),
-          const SizedBox(height: 12),
-          if (_type == 3)
-            DropdownButtonFormField<String>(
-              value: _destinationAccount,
-              decoration: const InputDecoration(
-                labelText: 'Billetera o Cuenta Destino (A donde llega el saldo)',
-                border: OutlineInputBorder(),
-              ),
-              items: accounts
-                  .map((a) => DropdownMenuItem(
-                        value: a.name,
-                        child: Text('${a.name} (${a.type})'),
-                      ))
-                  .toList(),
-              onChanged: (v) => setState(() => _destinationAccount = v),
-            )
-          else
-            DropdownButtonFormField<String>(
-              value: _selectedCategory,
-              decoration: InputDecoration(
-                labelText: _type == 2 ? 'Categoría de Gasto' : 'Categoría de Ingreso',
-                border: const OutlineInputBorder(),
-              ),
-              items: filteredCategories
-                  .map((c) => DropdownMenuItem(value: c.name, child: Text(c.name)))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedCategory = v),
+            onChanged: (v) => setState(() => _destinationAccount = v),
+          )
+        else
+          DropdownButtonFormField<String>(
+            value: _selectedCategory,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: _type == 2 ? 'Categoría de Gasto' : 'Categoría de Ingreso',
             ),
-          const SizedBox(height: 16),
-          FilledButton(
-            onPressed: () {
-              final amt = double.tryParse(_amountCtrl.text) ?? 0;
-              if (amt <= 0 || _selectedAccount == null) return;
-
-              final list = ref.read(transactionsListProvider);
-
-              if (_type == 3) {
-                if (_destinationAccount == null || _destinationAccount == _selectedAccount) {
-                  return;
-                }
-                ref.read(transactionsListProvider.notifier).state = [
-                  TxItem(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    description: _descCtrl.text.isEmpty
-                        ? 'Recarga / Transferencia de Saldo'
-                        : _descCtrl.text,
-                    amount: amt,
-                    type: 3,
-                    categoryName: 'Transferencia / Recarga',
-                    accountName: '$_selectedAccount → $_destinationAccount',
-                    memberName: session?.fullName ?? 'Hogar',
-                  ),
-                  ...list,
-                ];
-
-                ref.read(accountsProvider.notifier).state = accounts.map((acc) {
-                  if (acc.name == _selectedAccount) {
-                    return acc.copyWith(balance: acc.balance - amt);
-                  }
-                  if (acc.name == _destinationAccount) {
-                    return acc.copyWith(balance: acc.balance + amt);
-                  }
-                  return acc;
-                }).toList();
-              } else {
-                ref.read(transactionsListProvider.notifier).state = [
-                  TxItem(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    description: _descCtrl.text.isEmpty ? 'Movimiento' : _descCtrl.text,
-                    amount: amt,
-                    type: _type,
-                    categoryName: _selectedCategory!,
-                    accountName: _selectedAccount!,
-                    memberName: session?.fullName ?? 'Hogar',
-                  ),
-                  ...list,
-                ];
-
-                ref.read(accountsProvider.notifier).state = accounts.map((acc) {
-                  if (acc.name == _selectedAccount) {
-                    final delta = _type == 1 ? amt : -amt;
-                    return acc.copyWith(balance: acc.balance + delta);
-                  }
-                  return acc;
-                }).toList();
-              }
-
-              Navigator.pop(context);
-            },
-            child: Text(_type == 3 ? 'Ejecutar Recarga / Transferencia' : 'Guardar Movimiento'),
+            items: filteredCategories
+                .map((c) => DropdownMenuItem(
+                      value: c.name,
+                      child: Text(c.name, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedCategory = v),
           ),
-        ],
-      ),
+        const SizedBox(height: 24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () {
+                  final amt = double.tryParse(_amountCtrl.text) ?? 0;
+                  if (amt <= 0 || _selectedAccount == null) return;
+
+                  final list = ref.read(transactionsListProvider);
+
+                  if (_type == 3) {
+                    if (_destinationAccount == null ||
+                        _destinationAccount == _selectedAccount) {
+                      return;
+                    }
+                    ref.read(transactionsListProvider.notifier).state = [
+                      TxItem(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        description: _descCtrl.text.isEmpty
+                            ? 'Recarga / Transferencia de Saldo'
+                            : _descCtrl.text,
+                        amount: amt,
+                        type: 3,
+                        categoryName: 'Transferencia / Recarga',
+                        accountName: '$_selectedAccount → $_destinationAccount',
+                        memberName: session?.fullName ?? 'Hogar',
+                      ),
+                      ...list,
+                    ];
+
+                    ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                      if (acc.name == _selectedAccount) {
+                        return acc.copyWith(balance: acc.balance - amt);
+                      }
+                      if (acc.name == _destinationAccount) {
+                        return acc.copyWith(balance: acc.balance + amt);
+                      }
+                      return acc;
+                    }).toList();
+                  } else {
+                    ref.read(transactionsListProvider.notifier).state = [
+                      TxItem(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        description:
+                            _descCtrl.text.isEmpty ? 'Movimiento' : _descCtrl.text,
+                        amount: amt,
+                        type: _type,
+                        categoryName: _selectedCategory!,
+                        accountName: _selectedAccount!,
+                        memberName: session?.fullName ?? 'Hogar',
+                      ),
+                      ...list,
+                    ];
+
+                    ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                      if (acc.name == _selectedAccount) {
+                        final delta = _type == 1 ? amt : -amt;
+                        return acc.copyWith(balance: acc.balance + delta);
+                      }
+                      return acc;
+                    }).toList();
+                  }
+
+                  Navigator.pop(context);
+                },
+                child: Text(_type == 3 ? 'Transferir Saldo' : 'Guardar'),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
