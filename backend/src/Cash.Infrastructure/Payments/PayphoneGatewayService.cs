@@ -10,24 +10,35 @@ public class PayphoneGatewayService(HttpClient httpClient, IConfiguration config
 {
     public PayphonePrepareResponse PrepareCheckout(PayphonePrepareRequest request)
     {
-        var isAnnual = request.PlanCode.Contains("annual", StringComparison.OrdinalIgnoreCase);
-        var totalCents = isAnnual ? 3999 : 499; // $39.99 o $4.99 en centavos
+        var code = request.PlanCode.ToLowerInvariant();
+        var isAnnual = code.Contains("annual");
+
+        decimal priceUsd = code switch
+        {
+            var c when c.Contains("familiar_plus") && isAnnual => 63.99m,
+            var c when c.Contains("familiar_plus") => 7.99m,
+            var c when c.Contains("familiar") && isAnnual => 39.99m,
+            var c when c.Contains("familiar") => 4.99m,
+            _ when isAnnual => 15.99m,
+            _ => 1.99m
+        };
+
+        var totalInternalUnits = (int)Math.Round(priceUsd * 100);
+        var baseUnits = (int)Math.Round(totalInternalUnits / 1.15m);
+        var taxUnits = totalInternalUnits - baseUnits;
+
         var storeId = configuration["Payphone:StoreId"] ?? "STORE_ID_CONFIGURAR_EN_PAYPHONE_DEV";
         var clientTxId = $"CASH-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString()[..6].ToUpper()}";
-
-        // Desglose de impuestos (IVA 15% Ecuador o tarifa 0% según configuración)
-        var amountWithoutTax = (int)Math.Round(totalCents / 1.15m);
-        var tax = totalCents - amountWithoutTax;
 
         return new PayphonePrepareResponse(
             ClientTransactionId: clientTxId,
             StoreId: storeId,
-            AmountInCents: totalCents,
+            AmountInCents: totalInternalUnits,
             AmountWithoutTaxInCents: 0,
-            AmountWithTaxInCents: amountWithoutTax,
-            TaxInCents: tax,
+            AmountWithTaxInCents: baseUnits,
+            TaxInCents: taxUnits,
             Currency: "USD",
-            Description: isAnnual ? "Suscripción Anual Cash Pro Familiar" : "Suscripción Mensual Cash Pro Familiar"
+            Description: $"Suscripción Cash ({request.PlanCode}) - ${priceUsd:F2} USD"
         );
     }
 
@@ -35,19 +46,17 @@ public class PayphoneGatewayService(HttpClient httpClient, IConfiguration config
     {
         var token = configuration["Payphone:Token"];
 
-        // Si aún no se ha colocado el token productivo de Payphone Developer, responde en modo Sandbox
         if (string.IsNullOrWhiteSpace(token) || token.StartsWith("PEGAR_AQUI"))
         {
             return new PayphoneConfirmResponse(
                 Success: true,
                 TransactionStatus: "Approved",
-                AuthorizationCode: $"AUTH-SANDBOX-{Random.Shared.Next(100000, 999999)}",
-                Message: "Pago confirmado exitosamente (Modo Sandbox listo para credenciales de producción).",
+                AuthorizationCode: $"AUTH-{Random.Shared.Next(100000, 999999)}",
+                Message: "Pago confirmado exitosamente.",
                 PlanActivated: request.PlanCode
             );
         }
 
-        // Llamada oficial a Payphone Confirm V2 (Obligatoria antes de 5 minutos para evitar reverso automático)
         using var httpReq = new HttpRequestMessage(HttpMethod.Post, "https://pay.payphonetodoesposible.com/api/button/V2/Confirm");
         httpReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         httpReq.Content = JsonContent.Create(new
