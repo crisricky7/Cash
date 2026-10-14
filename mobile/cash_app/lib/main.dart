@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
+late SharedPreferences globalPrefs;
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  globalPrefs = await SharedPreferences.getInstance();
   runApp(const ProviderScope(child: CashApp()));
 }
 
@@ -72,7 +78,7 @@ Future<void> showAdaptiveSheetOrDialog({
 }
 
 // ============================================================================
-// MODELOS DE DOMINIO COMPLETOS
+// MODELOS DE DATOS CON SERIALIZACIÓN JSON REAL
 // ============================================================================
 enum SubscriptionTier {
   personal(
@@ -135,15 +141,44 @@ enum SubscriptionTier {
     required this.revenueCatMonthlySku,
     required this.revenueCatAnnualSku,
   });
+
+  static SubscriptionTier fromCode(String code) =>
+      SubscriptionTier.values.firstWhere((e) => e.code == code,
+          orElse: () => SubscriptionTier.personal);
 }
 
-class AuthSession {
+class RegisteredUser {
+  final String id;
   final String fullName;
   final String email;
+  final String password;
   final String role; // 'Usuario' | 'SuperAdmin'
-  AuthSession({required this.fullName, required this.email, required this.role});
+
+  RegisteredUser({
+    required this.id,
+    required this.fullName,
+    required this.email,
+    required this.password,
+    required this.role,
+  });
 
   bool get isSuperAdmin => role == 'SuperAdmin';
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'fullName': fullName,
+        'email': email,
+        'password': password,
+        'role': role,
+      };
+
+  factory RegisteredUser.fromJson(Map<String, dynamic> j) => RegisteredUser(
+        id: j['id'] ?? '',
+        fullName: j['fullName'] ?? '',
+        email: j['email'] ?? '',
+        password: j['password'] ?? '',
+        role: j['role'] ?? 'Usuario',
+      );
 }
 
 class HouseholdMember {
@@ -151,23 +186,55 @@ class HouseholdMember {
   final String name;
   final String email;
   final bool isOwner;
+
   HouseholdMember({
     required this.id,
     required this.name,
     required this.email,
     this.isOwner = false,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'email': email,
+        'isOwner': isOwner,
+      };
+
+  factory HouseholdMember.fromJson(Map<String, dynamic> j) => HouseholdMember(
+        id: j['id'] ?? '',
+        name: j['name'] ?? '',
+        email: j['email'] ?? '',
+        isOwner: j['isOwner'] ?? false,
+      );
 }
 
 class EmailInvitation {
   final String id;
   final String invitedName;
   final String invitedEmail;
+  final String token;
+
   EmailInvitation({
     required this.id,
     required this.invitedName,
     required this.invitedEmail,
+    required this.token,
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'invitedName': invitedName,
+        'invitedEmail': invitedEmail,
+        'token': token,
+      };
+
+  factory EmailInvitation.fromJson(Map<String, dynamic> j) => EmailInvitation(
+        id: j['id'] ?? '',
+        invitedName: j['invitedName'] ?? '',
+        invitedEmail: j['invitedEmail'] ?? '',
+        token: j['token'] ?? '',
+      );
 }
 
 class FinancialStoryTip {
@@ -176,7 +243,7 @@ class FinancialStoryTip {
   final String title;
   final String body;
   final String actionTip;
-  final List<Color> gradientColors;
+  final int themeIndex;
   final bool isSeen;
 
   FinancialStoryTip({
@@ -185,9 +252,19 @@ class FinancialStoryTip {
     required this.title,
     required this.body,
     required this.actionTip,
-    required this.gradientColors,
+    this.themeIndex = 0,
     this.isSeen = false,
   });
+
+  List<Color> get gradientColors {
+    const palettes = [
+      [Color(0xFF0D6E6E), Color(0xFF064E3B)],
+      [Color(0xFF0369A1), Color(0xFF1E3A8A)],
+      [Color(0xFFB45309), Color(0xFF78350F)],
+      [Color(0xFF6D28D9), Color(0xFF4C1D95)],
+    ];
+    return palettes[themeIndex.clamp(0, palettes.length - 1)];
+  }
 
   FinancialStoryTip copyWith({bool? isSeen}) => FinancialStoryTip(
         id: id,
@@ -195,8 +272,28 @@ class FinancialStoryTip {
         title: title,
         body: body,
         actionTip: actionTip,
-        gradientColors: gradientColors,
+        themeIndex: themeIndex,
         isSeen: isSeen ?? this.isSeen,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'tag': tag,
+        'title': title,
+        'body': body,
+        'actionTip': actionTip,
+        'themeIndex': themeIndex,
+        'isSeen': isSeen,
+      };
+
+  factory FinancialStoryTip.fromJson(Map<String, dynamic> j) => FinancialStoryTip(
+        id: j['id'] ?? '',
+        tag: j['tag'] ?? 'TIP OFICIAL CASH • 5 SEG',
+        title: j['title'] ?? '',
+        body: j['body'] ?? '',
+        actionTip: j['actionTip'] ?? '',
+        themeIndex: j['themeIndex'] ?? 0,
+        isSeen: j['isSeen'] ?? false,
       );
 }
 
@@ -205,13 +302,33 @@ class AccountModel {
   final String name;
   final String type; // Banco, Billetera Digital, Efectivo, Tarjeta de Crédito, Ahorro, Cooperativa
   final double balance;
-  AccountModel({required this.id, required this.name, required this.type, required this.balance});
+
+  AccountModel({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.balance,
+  });
 
   AccountModel copyWith({String? name, String? type, double? balance}) => AccountModel(
         id: id,
         name: name ?? this.name,
         type: type ?? this.type,
         balance: balance ?? this.balance,
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'type': type,
+        'balance': balance,
+      };
+
+  factory AccountModel.fromJson(Map<String, dynamic> j) => AccountModel(
+        id: j['id'] ?? '',
+        name: j['name'] ?? '',
+        type: j['type'] ?? 'Banco',
+        balance: (j['balance'] as num?)?.toDouble() ?? 0.0,
       );
 }
 
@@ -220,7 +337,8 @@ class CategoryModel {
   final String name;
   final int type; // 1 = Ingreso, 2 = Gasto
   final double monthlyBudget;
-  final String bucket503020; // Necesidades (50%) | Deseos / Estilo de Vida (30%) | Ahorro / Deudas (20%)
+  final String bucket503020;
+
   CategoryModel({
     required this.id,
     required this.name,
@@ -228,17 +346,35 @@ class CategoryModel {
     required this.monthlyBudget,
     this.bucket503020 = 'Necesidades (50%)',
   });
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'type': type,
+        'monthlyBudget': monthlyBudget,
+        'bucket503020': bucket503020,
+      };
+
+  factory CategoryModel.fromJson(Map<String, dynamic> j) => CategoryModel(
+        id: j['id'] ?? '',
+        name: j['name'] ?? '',
+        type: j['type'] ?? 2,
+        monthlyBudget: (j['monthlyBudget'] as num?)?.toDouble() ?? 0.0,
+        bucket503020: j['bucket503020'] ?? 'Necesidades (50%)',
+      );
 }
 
 class TxItem {
   final String id;
   final String description;
   final double amount;
-  final int type; // 1 = Ingreso, 2 = Gasto, 3 = Transferencia / Recarga Billetera
+  final int type; // 1 = Ingreso, 2 = Gasto, 3 = Transferencia / Recarga
   final String categoryName;
   final String accountName;
+  final String? destinationAccountName;
   final String memberName;
   final DateTime date;
+
   TxItem({
     required this.id,
     required this.description,
@@ -246,9 +382,34 @@ class TxItem {
     required this.type,
     required this.categoryName,
     required this.accountName,
+    this.destinationAccountName,
     required this.memberName,
     DateTime? date,
   }) : date = date ?? DateTime.now();
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'description': description,
+        'amount': amount,
+        'type': type,
+        'categoryName': categoryName,
+        'accountName': accountName,
+        'destinationAccountName': destinationAccountName,
+        'memberName': memberName,
+        'date': date.toIso8601String(),
+      };
+
+  factory TxItem.fromJson(Map<String, dynamic> j) => TxItem(
+        id: j['id'] ?? '',
+        description: j['description'] ?? '',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0.0,
+        type: j['type'] ?? 2,
+        categoryName: j['categoryName'] ?? '',
+        accountName: j['accountName'] ?? '',
+        destinationAccountName: j['destinationAccountName'],
+        memberName: j['memberName'] ?? '',
+        date: DateTime.tryParse(j['date'] ?? '') ?? DateTime.now(),
+      );
 }
 
 class CreditInstallmentModel {
@@ -268,7 +429,7 @@ class CreditInstallmentModel {
     required this.totalAmount,
     required this.totalMonths,
     required this.paidMonths,
-    this.cutOffDay = 14,
+    this.cutOffDay = 15,
     this.paymentDueDay = 2,
   });
 
@@ -285,6 +446,29 @@ class CreditInstallmentModel {
         cutOffDay: cutOffDay,
         paymentDueDay: paymentDueDay,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'cardName': cardName,
+        'description': description,
+        'totalAmount': totalAmount,
+        'totalMonths': totalMonths,
+        'paidMonths': paidMonths,
+        'cutOffDay': cutOffDay,
+        'paymentDueDay': paymentDueDay,
+      };
+
+  factory CreditInstallmentModel.fromJson(Map<String, dynamic> j) =>
+      CreditInstallmentModel(
+        id: j['id'] ?? '',
+        cardName: j['cardName'] ?? '',
+        description: j['description'] ?? '',
+        totalAmount: (j['totalAmount'] as num?)?.toDouble() ?? 0.0,
+        totalMonths: j['totalMonths'] ?? 12,
+        paidMonths: j['paidMonths'] ?? 0,
+        cutOffDay: j['cutOffDay'] ?? 15,
+        paymentDueDay: j['paymentDueDay'] ?? 2,
+      );
 }
 
 class SavingsGoalModel {
@@ -293,6 +477,7 @@ class SavingsGoalModel {
   final double targetAmount;
   final double currentAmount;
   final String deadline;
+
   SavingsGoalModel({
     required this.id,
     required this.title,
@@ -308,6 +493,22 @@ class SavingsGoalModel {
         currentAmount: currentAmount ?? this.currentAmount,
         deadline: deadline,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'targetAmount': targetAmount,
+        'currentAmount': currentAmount,
+        'deadline': deadline,
+      };
+
+  factory SavingsGoalModel.fromJson(Map<String, dynamic> j) => SavingsGoalModel(
+        id: j['id'] ?? '',
+        title: j['title'] ?? '',
+        targetAmount: (j['targetAmount'] as num?)?.toDouble() ?? 0.0,
+        currentAmount: (j['currentAmount'] as num?)?.toDouble() ?? 0.0,
+        deadline: j['deadline'] ?? '',
+      );
 }
 
 class RecurringBillModel {
@@ -317,6 +518,7 @@ class RecurringBillModel {
   final double amount;
   final int dueDay;
   final bool isPaid;
+
   RecurringBillModel({
     required this.id,
     required this.title,
@@ -334,6 +536,202 @@ class RecurringBillModel {
         dueDay: dueDay,
         isPaid: isPaid ?? this.isPaid,
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'category': category,
+        'amount': amount,
+        'dueDay': dueDay,
+        'isPaid': isPaid,
+      };
+
+  factory RecurringBillModel.fromJson(Map<String, dynamic> j) => RecurringBillModel(
+        id: j['id'] ?? '',
+        title: j['title'] ?? '',
+        category: j['category'] ?? 'Servicios Básicos',
+        amount: (j['amount'] as num?)?.toDouble() ?? 0.0,
+        dueDay: j['dueDay'] ?? 15,
+        isPaid: j['isPaid'] ?? false,
+      );
+}
+
+// ============================================================================
+// MOTOR DE BASE DE DATOS Y PERSISTENCIA REAL POR USUARIO (SHARED PREFERENCES)
+// ============================================================================
+class CashStorageEngine {
+  static const String _usersKey = 'cash_prod_users_v2';
+  static const String _lastBioEmailKey = 'cash_prod_last_bio_email_v2';
+  static const String _storiesKey = 'cash_prod_global_stories_v2';
+
+  static List<RegisteredUser> getRegisteredUsers() {
+    final raw = globalPrefs.getString(_usersKey);
+    if (raw == null) return [];
+    final list = jsonDecode(raw) as List<dynamic>;
+    return list.map((e) => RegisteredUser.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  static Future<void> saveRegisteredUsers(List<RegisteredUser> users) async {
+    await globalPrefs.setString(
+        _usersKey, jsonEncode(users.map((e) => e.toJson()).toList()));
+  }
+
+  static String? getLastBiometricEmail() => globalPrefs.getString(_lastBioEmailKey);
+
+  static Future<void> setLastBiometricEmail(String email) async {
+    await globalPrefs.setString(_lastBioEmailKey, email.toLowerCase().trim());
+  }
+
+  static List<FinancialStoryTip> getGlobalStories() {
+    final raw = globalPrefs.getString(_storiesKey);
+    if (raw == null) {
+      return [
+        FinancialStoryTip(
+          id: 's1',
+          tag: 'TIP OFICIAL CASH • 5 SEG',
+          title: 'Regla de las 24 Horas',
+          body:
+              'Antes de realizar un gasto no planificado mayor a \$30 USD, espera 24 horas. El 70% de las compras impulsivas se evitan con esta pausa.',
+          actionTip: 'Registra hoy todos tus movimientos reales.',
+          themeIndex: 0,
+          isSeen: false,
+        ),
+      ];
+    }
+    final list = jsonDecode(raw) as List<dynamic>;
+    return list
+        .map((e) => FinancialStoryTip.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  static Future<void> saveGlobalStories(List<FinancialStoryTip> stories) async {
+    await globalPrefs.setString(
+        _storiesKey, jsonEncode(stories.map((e) => e.toJson()).toList()));
+  }
+
+  static String _userKey(String email, String suffix) =>
+      'cash_u_${email.toLowerCase().trim()}_$suffix';
+
+  // Inicializa un espacio de trabajo 100% limpio (Saldos en $0.00, 0 movimientos falsos)
+  static Future<void> initializeCleanWorkspaceForNewUser(RegisteredUser user) async {
+    final email = user.email;
+    if (globalPrefs.getString(_userKey(email, 'accounts')) != null) return;
+
+    final cleanAccounts = [
+      AccountModel(id: 'acc_1', name: 'Cuenta Bancaria Principal', type: 'Banco', balance: 0.00),
+      AccountModel(id: 'acc_2', name: 'Billetera Digital (Payphone / Deuna)', type: 'Billetera Digital', balance: 0.00),
+      AccountModel(id: 'acc_3', name: 'Efectivo Disponible', type: 'Efectivo', balance: 0.00),
+    ];
+
+    final defaultCategories = [
+      CategoryModel(id: 'cat_1', name: 'Supermercado y Alimentación', type: 2, monthlyBudget: 400.00, bucket503020: 'Necesidades (50%)'),
+      CategoryModel(id: 'cat_2', name: 'Servicios Básicos (Luz/Agua/Internet)', type: 2, monthlyBudget: 150.00, bucket503020: 'Necesidades (50%)'),
+      CategoryModel(id: 'cat_3', name: 'Educación y Salud', type: 2, monthlyBudget: 200.00, bucket503020: 'Necesidades (50%)'),
+      CategoryModel(id: 'cat_4', name: 'Transporte y Combustible', type: 2, monthlyBudget: 120.00, bucket503020: 'Necesidades (50%)'),
+      CategoryModel(id: 'cat_5', name: 'Restaurantes, Salidas y Ocio', type: 2, monthlyBudget: 100.00, bucket503020: 'Deseos / Estilo de Vida (30%)'),
+      CategoryModel(id: 'cat_6', name: 'Sueldo / Ingreso Principal', type: 1, monthlyBudget: 0.00),
+      CategoryModel(id: 'cat_7', name: 'Honorarios / Otros Ingresos', type: 1, monthlyBudget: 0.00),
+    ];
+
+    final initialMembers = [
+      HouseholdMember(id: user.id, name: user.fullName, email: user.email, isOwner: true),
+    ];
+
+    await saveAccounts(email, cleanAccounts);
+    await saveCategories(email, defaultCategories);
+    await saveTransactions(email, []); // 0 transacciones falsas
+    await saveInstallments(email, []); // 0 diferidos falsos
+    await saveGoals(email, []);        // 0 metas falsas
+    await saveBills(email, []);        // 0 pagos fijos falsos
+    await saveMembers(email, initialMembers);
+    await saveInvitations(email, []);
+    await saveTier(email, SubscriptionTier.personal, false, 'Plan Personal (\$1.99 USD/mes)');
+  }
+
+  static List<AccountModel> getAccounts(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'accounts'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => AccountModel.fromJson(e)).toList();
+  }
+
+  static Future<void> saveAccounts(String email, List<AccountModel> list) async =>
+      globalPrefs.setString(_userKey(email, 'accounts'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<CategoryModel> getCategories(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'categories'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => CategoryModel.fromJson(e)).toList();
+  }
+
+  static Future<void> saveCategories(String email, List<CategoryModel> list) async =>
+      globalPrefs.setString(_userKey(email, 'categories'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<TxItem> getTransactions(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'tx'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => TxItem.fromJson(e)).toList();
+  }
+
+  static Future<void> saveTransactions(String email, List<TxItem> list) async =>
+      globalPrefs.setString(_userKey(email, 'tx'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<CreditInstallmentModel> getInstallments(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'installments'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => CreditInstallmentModel.fromJson(e)).toList();
+  }
+
+  static Future<void> saveInstallments(String email, List<CreditInstallmentModel> list) async =>
+      globalPrefs.setString(_userKey(email, 'installments'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<SavingsGoalModel> getGoals(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'goals'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => SavingsGoalModel.fromJson(e)).toList();
+  }
+
+  static Future<void> saveGoals(String email, List<SavingsGoalModel> list) async =>
+      globalPrefs.setString(_userKey(email, 'goals'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<RecurringBillModel> getBills(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'bills'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => RecurringBillModel.fromJson(e)).toList();
+  }
+
+  static Future<void> saveBills(String email, List<RecurringBillModel> list) async =>
+      globalPrefs.setString(_userKey(email, 'bills'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<HouseholdMember> getMembers(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'members'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => HouseholdMember.fromJson(e)).toList();
+  }
+
+  static Future<void> saveMembers(String email, List<HouseholdMember> list) async =>
+      globalPrefs.setString(_userKey(email, 'members'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static List<EmailInvitation> getInvitations(String email) {
+    final raw = globalPrefs.getString(_userKey(email, 'invites'));
+    if (raw == null) return [];
+    return (jsonDecode(raw) as List).map((e) => EmailInvitation.fromJson(e)).toList();
+  }
+
+  static Future<void> saveInvitations(String email, List<EmailInvitation> list) async =>
+      globalPrefs.setString(_userKey(email, 'invites'), jsonEncode(list.map((e) => e.toJson()).toList()));
+
+  static (SubscriptionTier, bool, String) getTierInfo(String email) {
+    final code = globalPrefs.getString(_userKey(email, 'tier_code')) ?? 'personal';
+    final isAnnual = globalPrefs.getBool(_userKey(email, 'tier_annual')) ?? true;
+    final label = globalPrefs.getString(_userKey(email, 'tier_label')) ?? 'Plan Personal (\$1.99 USD/mes)';
+    return (SubscriptionTier.fromCode(code), isAnnual, label);
+  }
+
+  static Future<void> saveTier(String email, SubscriptionTier tier, bool isAnnual, String label) async {
+    await globalPrefs.setString(_userKey(email, 'tier_code'), tier.code);
+    await globalPrefs.setBool(_userKey(email, 'tier_annual'), isAnnual);
+    await globalPrefs.setString(_userKey(email, 'tier_label'), label);
+  }
 }
 
 // ============================================================================
@@ -346,9 +744,9 @@ class SmartInputParser {
     String category,
     String accountName,
     int type,
-  })? parse(String rawText, List<AccountModel> accounts) {
+  })? parse(String rawText, List<AccountModel> accounts, List<CategoryModel> categories) {
     final text = rawText.trim();
-    if (text.isEmpty) return null;
+    if (text.isEmpty || accounts.isEmpty) return null;
 
     final numRegex = RegExp(r'(\d+[.,]?\d*)');
     final match = numRegex.firstMatch(text);
@@ -369,9 +767,17 @@ class SmartInputParser {
         lower.contains('ingreso') ||
         lower.contains('abono') ||
         lower.contains('cobro') ||
-        lower.contains('salario');
+        lower.contains('salario') ||
+        lower.contains('honorarios');
 
+    // Buscar si el texto menciona el nombre de alguna cuenta creada por el usuario
     String selectedAccount = accounts.first.name;
+    for (final acc in accounts) {
+      if (lower.contains(acc.name.toLowerCase())) {
+        selectedAccount = acc.name;
+        break;
+      }
+    }
     if (lower.contains('deuna') ||
         lower.contains('payphone') ||
         lower.contains('billetera') ||
@@ -383,28 +789,39 @@ class SmartInputParser {
       if (cash != null) selectedAccount = cash.name;
     }
 
-    String category = isIncome ? 'Ingresos / Salario' : 'Supermercado y Alimentación';
+    final expenseCats = categories.where((c) => c.type == 2).toList();
+    final incomeCats = categories.where((c) => c.type == 1).toList();
+
+    String category = isIncome
+        ? (incomeCats.isNotEmpty ? incomeCats.first.name : 'Ingresos')
+        : (expenseCats.isNotEmpty ? expenseCats.first.name : 'General');
+
     if (!isIncome) {
       if (lower.contains('taxi') ||
           lower.contains('uber') ||
           lower.contains('bus') ||
           lower.contains('gasolina')) {
-        category = 'Transporte y Movilidad';
+        final matchCat = expenseCats.where((c) => c.name.toLowerCase().contains('transporte')).firstOrNull;
+        if (matchCat != null) category = matchCat.name;
       } else if (lower.contains('luz') ||
           lower.contains('agua') ||
           lower.contains('internet') ||
           lower.contains('plan')) {
-        category = 'Servicios Básicos (Luz/Agua/Net)';
+        final matchCat = expenseCats.where((c) => c.name.toLowerCase().contains('servicio')).firstOrNull;
+        if (matchCat != null) category = matchCat.name;
       } else if (lower.contains('farmacia') ||
           lower.contains('medico') ||
           lower.contains('salud') ||
           lower.contains('colegio')) {
-        category = 'Educación y Salud';
+        final matchCat = expenseCats.where((c) => c.name.toLowerCase().contains('salud') || c.name.toLowerCase().contains('educa')).firstOrNull;
+        if (matchCat != null) category = matchCat.name;
       } else if (lower.contains('cafe') ||
           lower.contains('cine') ||
           lower.contains('salida') ||
+          lower.contains('restaurante') ||
           lower.contains('pizza')) {
-        category = 'Restaurantes, Salidas y Ocio';
+        final matchCat = expenseCats.where((c) => c.name.toLowerCase().contains('restaurante') || c.name.toLowerCase().contains('ocio')).firstOrNull;
+        if (matchCat != null) category = matchCat.name;
       }
     }
 
@@ -423,241 +840,89 @@ class SmartInputParser {
 }
 
 // ============================================================================
-// PROVIDERS GLOBALES (TODOS LOS MÓDULOS ACTIVOS)
+// PROVIDERS GLOBALES SINCRONIZADOS CON PERSISTENCIA REAL
 // ============================================================================
-final authSessionProvider = StateProvider<AuthSession?>((ref) => null);
+final authSessionProvider = StateProvider<RegisteredUser?>((ref) => null);
 final isDarkModeProvider = StateProvider<bool>((ref) => false);
 final navIndexProvider = StateProvider<int>((ref) => 0);
-final copilotSubTabProvider = StateProvider<int>((ref) => 0); // 0: Diferidos, 1: Metas, 2: 50/30/20 & CSV
+final copilotSubTabProvider = StateProvider<int>((ref) => 0);
 final selectedMemberFilterProvider = StateProvider<String?>((ref) => null);
 final searchQueryProvider = StateProvider<String>((ref) => '');
 
-final subscriptionTierProvider =
-    StateProvider<SubscriptionTier>((ref) => SubscriptionTier.personal);
-final isAnnualBillingSelectedProvider = StateProvider<bool>((ref) => true);
-final activeBillingCycleTextProvider =
-    StateProvider<String>((ref) => 'Plan Personal (\$1.99 USD/mes)');
+final storiesProvider = StateProvider<List<FinancialStoryTip>>(
+    (ref) => CashStorageEngine.getGlobalStories());
 
-final householdMembersProvider = StateProvider<List<HouseholdMember>>((ref) => [
-      HouseholdMember(
-        id: 'm1',
-        name: 'Titular de Cuenta',
-        email: 'usuario@cash.com',
-        isOwner: true,
-      ),
-    ]);
+final accountsProvider = StateProvider<List<AccountModel>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getAccounts(user.email);
+});
 
-final pendingInvitationsProvider = StateProvider<List<EmailInvitation>>((ref) => []);
+final categoriesProvider = StateProvider<List<CategoryModel>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getCategories(user.email);
+});
+
+final transactionsListProvider = StateProvider<List<TxItem>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getTransactions(user.email);
+});
+
+final installmentsProvider = StateProvider<List<CreditInstallmentModel>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getInstallments(user.email);
+});
+
+final savingsGoalsProvider = StateProvider<List<SavingsGoalModel>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getGoals(user.email);
+});
+
+final recurringBillsProvider = StateProvider<List<RecurringBillModel>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getBills(user.email);
+});
+
+final householdMembersProvider = StateProvider<List<HouseholdMember>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getMembers(user.email);
+});
+
+final pendingInvitationsProvider = StateProvider<List<EmailInvitation>>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return [];
+  return CashStorageEngine.getInvitations(user.email);
+});
+
+final subscriptionTierProvider = StateProvider<SubscriptionTier>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return SubscriptionTier.personal;
+  return CashStorageEngine.getTierInfo(user.email).$1;
+});
+
+final isAnnualBillingSelectedProvider = StateProvider<bool>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return true;
+  return CashStorageEngine.getTierInfo(user.email).$2;
+});
+
+final activeBillingCycleTextProvider = StateProvider<String>((ref) {
+  final user = ref.watch(authSessionProvider);
+  if (user == null) return 'Plan Personal (\$1.99 USD/mes)';
+  return CashStorageEngine.getTierInfo(user.email).$3;
+});
 
 // REGLA AUTOMÁTICA: 1 persona = Modo Personal (false) | >1 personas = Modo Familiar (true)
 final isFamilyModeProvider = Provider<bool>((ref) {
   final members = ref.watch(householdMembersProvider);
   return members.length > 1;
 });
-
-final storiesProvider = StateProvider<List<FinancialStoryTip>>((ref) => [
-      FinancialStoryTip(
-        id: 's1',
-        tag: 'TIP OFICIAL CASH • 5 SEG',
-        title: 'La Regla de las 24 Horas',
-        body:
-            'Antes de hacer una compra no planificada mayor a \$30, espera 24 horas. El 70% de las veces el impulso desaparece y ese dinero se queda en tu cuenta.',
-        actionTip: 'Reto de hoy: Aplica esta pausa antes de comprar online.',
-        gradientColors: const [Color(0xFF0D6E6E), Color(0xFF064E3B)],
-        isSeen: false,
-      ),
-      FinancialStoryTip(
-        id: 's2',
-        tag: 'ECONOMÍA INTELIGENTE • 5 SEG',
-        title: 'Recarga fija en tu Billetera Digital',
-        body:
-            'Transfiere cada lunes un monto fijo (ej. \$25) a tu Billetera Digital para cafés, snacks o pagos QR. Así blindas tu cuenta bancaria principal.',
-        actionTip: 'Usa tus Billeteras Digitales como escudo para gastos diarios.',
-        gradientColors: const [Color(0xFF0369A1), Color(0xFF1E3A8A)],
-        isSeen: false,
-      ),
-      FinancialStoryTip(
-        id: 's3',
-        tag: 'PAZ MENTAL • 5 SEG',
-        title: 'Separa tus Pagos Fijos el Día 1',
-        body:
-            'Apartar luz, internet y educación el primer día del mes reduce en un 80% el estrés financiero durante las siguientes 3 semanas.',
-        actionTip: 'Tu métrica "Disponible hoy" ya protege tus pagos fijos.',
-        gradientColors: const [Color(0xFF7C2D12), Color(0xFF9A3412)],
-        isSeen: false,
-      ),
-    ]);
-
-final accountsProvider = StateProvider<List<AccountModel>>((ref) => [
-      AccountModel(id: 'a1', name: 'Cuenta Bancaria Principal', type: 'Banco', balance: 1850.00),
-      AccountModel(
-          id: 'a2',
-          name: 'Billetera Digital (Payphone / Deuna)',
-          type: 'Billetera Digital',
-          balance: 195.00),
-      AccountModel(id: 'a3', name: 'Efectivo Disponible', type: 'Efectivo', balance: 140.00),
-      AccountModel(id: 'a4', name: 'Fondo de Reserva', type: 'Ahorro', balance: 3200.00),
-    ]);
-
-final categoriesProvider = StateProvider<List<CategoryModel>>((ref) => [
-      CategoryModel(
-        id: 'c1',
-        name: 'Supermercado y Alimentación',
-        type: 2,
-        monthlyBudget: 600.00,
-        bucket503020: 'Necesidades (50%)',
-      ),
-      CategoryModel(
-        id: 'c2',
-        name: 'Servicios Básicos (Luz/Agua/Net)',
-        type: 2,
-        monthlyBudget: 180.00,
-        bucket503020: 'Necesidades (50%)',
-      ),
-      CategoryModel(
-        id: 'c3',
-        name: 'Educación y Salud',
-        type: 2,
-        monthlyBudget: 350.00,
-        bucket503020: 'Necesidades (50%)',
-      ),
-      CategoryModel(
-        id: 'c4',
-        name: 'Transporte y Movilidad',
-        type: 2,
-        monthlyBudget: 150.00,
-        bucket503020: 'Necesidades (50%)',
-      ),
-      CategoryModel(
-        id: 'c5',
-        name: 'Restaurantes, Salidas y Ocio',
-        type: 2,
-        monthlyBudget: 180.00,
-        bucket503020: 'Deseos / Estilo de Vida (30%)',
-      ),
-      CategoryModel(
-        id: 'c6',
-        name: 'Ingresos / Salario',
-        type: 1,
-        monthlyBudget: 0.00,
-      ),
-      CategoryModel(
-        id: 'c7',
-        name: 'Honorarios / Ingresos Extra',
-        type: 1,
-        monthlyBudget: 0.00,
-      ),
-    ]);
-
-final transactionsListProvider = StateProvider<List<TxItem>>((ref) => [
-      TxItem(
-        id: 't1',
-        description: 'Compra Quincenal Supermercado',
-        amount: 165.00,
-        type: 2,
-        categoryName: 'Supermercado y Alimentación',
-        accountName: 'Cuenta Bancaria Principal',
-        memberName: 'Titular de Cuenta',
-        date: DateTime.now().subtract(const Duration(hours: 5)),
-      ),
-      TxItem(
-        id: 't2',
-        description: 'Café y Panadería QR (Gasto Hormiga)',
-        amount: 8.50,
-        type: 2,
-        categoryName: 'Restaurantes, Salidas y Ocio',
-        accountName: 'Billetera Digital (Payphone / Deuna)',
-        memberName: 'Titular de Cuenta',
-        date: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      TxItem(
-        id: 't3',
-        description: 'Recarga de Saldo a Billetera Digital',
-        amount: 100.00,
-        type: 3,
-        categoryName: 'Transferencia / Recarga',
-        accountName: 'Cuenta Bancaria Principal → Billetera Digital',
-        memberName: 'Titular de Cuenta',
-        date: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-      TxItem(
-        id: 't4',
-        description: 'Ingreso Salario Mensual',
-        amount: 2800.00,
-        type: 1,
-        categoryName: 'Ingresos / Salario',
-        accountName: 'Cuenta Bancaria Principal',
-        memberName: 'Titular de Cuenta',
-        date: DateTime.now().subtract(const Duration(days: 4)),
-      ),
-    ]);
-
-final installmentsProvider = StateProvider<List<CreditInstallmentModel>>((ref) => [
-      CreditInstallmentModel(
-        id: 'i1',
-        cardName: 'Visa Titanium',
-        description: 'Refrigeradora Inverter (Diferido Sin Intereses)',
-        totalAmount: 1200.00,
-        totalMonths: 12,
-        paidMonths: 5,
-        cutOffDay: 14,
-        paymentDueDay: 2,
-      ),
-      CreditInstallmentModel(
-        id: 'i2',
-        cardName: 'Mastercard Black',
-        description: 'Matrícula y Equipamiento Escolar Anual',
-        totalAmount: 600.00,
-        totalMonths: 6,
-        paidMonths: 3,
-        cutOffDay: 20,
-        paymentDueDay: 8,
-      ),
-    ]);
-
-final savingsGoalsProvider = StateProvider<List<SavingsGoalModel>>((ref) => [
-      SavingsGoalModel(
-        id: 'g1',
-        title: 'Fondo de Emergencia (6 Meses)',
-        targetAmount: 5000.00,
-        currentAmount: 3200.00,
-        deadline: 'Dic 2026',
-      ),
-      SavingsGoalModel(
-        id: 'g2',
-        title: 'Vacaciones Fin de Año',
-        targetAmount: 1800.00,
-        currentAmount: 950.00,
-        deadline: 'Nov 2026',
-      ),
-    ]);
-
-final recurringBillsProvider = StateProvider<List<RecurringBillModel>>((ref) => [
-      RecurringBillModel(
-        id: 'r1',
-        title: 'Internet Fibra Óptica',
-        category: 'Servicios Básicos (Luz/Agua/Net)',
-        amount: 45.00,
-        dueDay: 5,
-        isPaid: true,
-      ),
-      RecurringBillModel(
-        id: 'r2',
-        title: 'Mensualidad / Educación',
-        category: 'Educación y Salud',
-        amount: 220.00,
-        dueDay: 10,
-        isPaid: false,
-      ),
-      RecurringBillModel(
-        id: 'r3',
-        title: 'Luz y Agua Potable',
-        category: 'Servicios Básicos (Luz/Agua/Net)',
-        amount: 55.00,
-        dueDay: 18,
-        isPaid: false,
-      ),
-    ]);
 
 IconData getAccountTypeIcon(String type) {
   switch (type) {
@@ -808,9 +1073,11 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
     final stories = ref.read(storiesProvider);
     if (_currentIndex >= 0 && _currentIndex < stories.length) {
       final targetId = stories[_currentIndex].id;
-      ref.read(storiesProvider.notifier).state = stories
+      final updated = stories
           .map((s) => s.id == targetId ? s.copyWith(isSeen: true) : s)
           .toList();
+      ref.read(storiesProvider.notifier).state = updated;
+      CashStorageEngine.saveGlobalStories(updated);
     }
   }
 
@@ -992,7 +1259,7 @@ class _StoryViewerModalState extends ConsumerState<StoryViewerModal> {
                                   ),
                                   onPressed: _openAdminCreateStorySheet,
                                   icon: const Icon(Icons.admin_panel_settings, size: 16),
-                                  label: const Text('Admin: +Tip 5s',
+                                  label: const Text('+ Publicar Tip',
                                       style: TextStyle(fontSize: 11)),
                                 ),
                               IconButton(
@@ -1089,11 +1356,11 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
   final _actionCtrl = TextEditingController(text: 'Aplícalo hoy en tus finanzas.');
   int _selectedTheme = 0;
 
-  final _themes = const [
-    ('Verde Salvia (Armonía Familiar)', [Color(0xFF0D6E6E), Color(0xFF064E3B)]),
-    ('Azul Océano (Control Personal)', [Color(0xFF0369A1), Color(0xFF1E3A8A)]),
-    ('Ámbar Dorado (Ahorro Inteligente)', [Color(0xFFB45309), Color(0xFF78350F)]),
-    ('Violeta Profundo (Inversión)', [Color(0xFF6D28D9), Color(0xFF4C1D95)]),
+  final _themeNames = const [
+    'Verde Salvia (Armonía Familiar)',
+    'Azul Océano (Control Personal)',
+    'Ámbar Dorado (Ahorro Inteligente)',
+    'Violeta Profundo (Inversión)',
   ];
 
   @override
@@ -1108,22 +1375,17 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
             const SizedBox(width: 8),
             const Expanded(
               child: Text(
-                'Consola SuperAdmin: Publicar Historia (5s)',
+                'Publicar Nueva Historia Diaria (5s)',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        const Text(
-          'Exclusivo para ti como administrador/desarrollador de Cash. Al publicar, todos los usuarios verán el anillo estilo Instagram iluminado.',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
-        ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         TextField(
           controller: _titleCtrl,
           decoration: const InputDecoration(
-            labelText: 'Título del Tip (Ej. Compra al por mayor)',
+            labelText: 'Título del Tip',
             prefixIcon: Icon(Icons.title),
           ),
         ),
@@ -1139,7 +1401,7 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
         TextField(
           controller: _actionCtrl,
           decoration: const InputDecoration(
-            labelText: 'Reto o acción del día',
+            labelText: 'Reto o acción sugerida',
             prefixIcon: Icon(Icons.bolt),
           ),
         ),
@@ -1147,10 +1409,10 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
         DropdownButtonFormField<int>(
           value: _selectedTheme,
           isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Color de Fondo de la Historia'),
+          decoration: const InputDecoration(labelText: 'Color de Fondo'),
           items: List.generate(
-            _themes.length,
-            (i) => DropdownMenuItem(value: i, child: Text(_themes[i].$1)),
+            _themeNames.length,
+            (i) => DropdownMenuItem(value: i, child: Text(_themeNames[i])),
           ),
           onChanged: (v) => setState(() => _selectedTheme = v!),
         ),
@@ -1176,7 +1438,7 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
                     return;
                   }
                   final current = ref.read(storiesProvider);
-                  ref.read(storiesProvider.notifier).state = [
+                  final updated = [
                     ...current,
                     FinancialStoryTip(
                       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -1184,15 +1446,17 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
                       title: _titleCtrl.text.trim(),
                       body: _bodyCtrl.text.trim(),
                       actionTip: _actionCtrl.text.trim(),
-                      gradientColors: _themes[_selectedTheme].$2,
+                      themeIndex: _selectedTheme,
                       isSeen: false,
                     ),
                   ];
+                  ref.read(storiesProvider.notifier).state = updated;
+                  CashStorageEngine.saveGlobalStories(updated);
                   Navigator.pop(context);
                   widget.onCreated();
                 },
                 icon: const Icon(Icons.publish, size: 18),
-                label: const Text('Publicar a Usuarios'),
+                label: const Text('Publicar Historia'),
               ),
             ),
           ],
@@ -1203,7 +1467,7 @@ class _AdminCreateStoryTipFormState extends ConsumerState<_AdminCreateStoryTipFo
 }
 
 // ============================================================================
-// APP PRINCIPAL: CAMBIO AUTOMÁTICO DE COLOR (1 USUARIO = PERSONAL | >1 = FAMILIAR)
+// APP PRINCIPAL
 // ============================================================================
 class CashApp extends ConsumerWidget {
   const CashApp({super.key});
@@ -1218,7 +1482,7 @@ class CashApp extends ConsumerWidget {
     final lightBg = isFamily ? const Color(0xFFF3F7F5) : const Color(0xFFF1F5F9);
 
     return MaterialApp(
-      title: 'Cash · Finanzas Personales y Familiares',
+      title: 'Cash · Control de Gastos Personal y Familiar',
       debugShowCheckedModeBanner: false,
       themeMode: isDark ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData(
@@ -1246,44 +1510,141 @@ class CashApp extends ConsumerWidget {
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
-      home: session == null ? const LoginScreen() : const CompleteHomeShell(),
+      home: session == null ? const RealAuthScreen() : const CompleteHomeShell(),
     );
   }
 }
 
 // ============================================================================
-// PANTALLA DE LOGIN CON HUELLA BIOMÉTRICA + ROL CLIENTE vs DESARROLLADOR
+// PANTALLA DE REGISTRO E INICIO DE SESIÓN REAL (CERO BOTONES DEMO)
 // ============================================================================
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class RealAuthScreen extends ConsumerStatefulWidget {
+  const RealAuthScreen({super.key});
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<RealAuthScreen> createState() => _RealAuthScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailCtrl = TextEditingController(text: 'usuario@cash.com');
-  final _passCtrl = TextEditingController(text: 'Password123!');
+class _RealAuthScreenState extends ConsumerState<RealAuthScreen> {
+  bool _isRegisterMode = false;
+  final _nameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _confirmPassCtrl = TextEditingController();
+  bool _registerAsAppAdmin = false;
   bool _scanningFingerprint = false;
+  String? _errorMsg;
 
-  void _login(String name, String email, String role) {
-    ref.read(authSessionProvider.notifier).state =
-        AuthSession(fullName: name, email: email, role: role);
+  @override
+  void initState() {
+    super.initState();
+    final users = CashStorageEngine.getRegisteredUsers();
+    if (users.isEmpty) {
+      // Si aún no hay ningún usuario creado en el dispositivo, abre directo en "Crear Cuenta"
+      _isRegisterMode = true;
+    } else {
+      final lastEmail = CashStorageEngine.getLastBiometricEmail();
+      if (lastEmail != null) {
+        _emailCtrl.text = lastEmail;
+      }
+    }
   }
 
-  Future<void> _authenticateWithFingerprint() async {
-    setState(() => _scanningFingerprint = true);
+  Future<void> _submitAuth() async {
+    setState(() => _errorMsg = null);
+    final email = _emailCtrl.text.trim().toLowerCase();
+    final pass = _passCtrl.text;
+
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _errorMsg = 'Ingresa un correo electrónico válido.');
+      return;
+    }
+    if (pass.length < 4) {
+      setState(() => _errorMsg = 'La contraseña debe tener al menos 4 caracteres.');
+      return;
+    }
+
+    final users = CashStorageEngine.getRegisteredUsers();
+
+    if (_isRegisterMode) {
+      final fullName = _nameCtrl.text.trim();
+      if (fullName.isEmpty) {
+        setState(() => _errorMsg = 'Ingresa tu nombre completo.');
+        return;
+      }
+      if (pass != _confirmPassCtrl.text) {
+        setState(() => _errorMsg = 'Las contraseñas no coinciden.');
+        return;
+      }
+      if (users.any((u) => u.email.toLowerCase() == email)) {
+        setState(() =>
+            _errorMsg = 'Este correo ya está registrado. Cambia a "Iniciar Sesión".');
+        return;
+      }
+
+      final newUser = RegisteredUser(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        fullName: fullName,
+        email: email,
+        password: pass,
+        role: _registerAsAppAdmin ? 'SuperAdmin' : 'Usuario',
+      );
+
+      final updatedUsers = [...users, newUser];
+      await CashStorageEngine.saveRegisteredUsers(updatedUsers);
+      await CashStorageEngine.initializeCleanWorkspaceForNewUser(newUser);
+      await CashStorageEngine.setLastBiometricEmail(newUser.email);
+
+      ref.read(authSessionProvider.notifier).state = newUser;
+    } else {
+      final match = users
+          .where((u) => u.email.toLowerCase() == email && u.password == pass)
+          .firstOrNull;
+      if (match == null) {
+        setState(() =>
+            _errorMsg = 'Correo o contraseña incorrectos. Si eres nuevo, pulsa "Crear Cuenta".');
+        return;
+      }
+      await CashStorageEngine.initializeCleanWorkspaceForNewUser(match);
+      await CashStorageEngine.setLastBiometricEmail(match.email);
+      ref.read(authSessionProvider.notifier).state = match;
+    }
+  }
+
+  Future<void> _loginWithBiometricFingerprint() async {
+    final lastEmail = CashStorageEngine.getLastBiometricEmail();
+    final users = CashStorageEngine.getRegisteredUsers();
+    final targetUser = lastEmail != null
+        ? users.where((u) => u.email.toLowerCase() == lastEmail).firstOrNull
+        : users.firstOrNull;
+
+    if (targetUser == null) {
+      setState(() {
+        _isRegisterMode = true;
+        _errorMsg = 'Primero registra tu cuenta para vincular tu Huella Digital en este dispositivo.';
+      });
+      return;
+    }
+
+    setState(() {
+      _scanningFingerprint = true;
+      _errorMsg = null;
+    });
     HapticFeedback.lightImpact();
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
     setState(() => _scanningFingerprint = false);
-    final members = ref.read(householdMembersProvider);
-    _login(members.first.name, members.first.email, 'Usuario');
+
+    await CashStorageEngine.initializeCleanWorkspaceForNewUser(targetUser);
+    ref.read(authSessionProvider.notifier).state = targetUser;
   }
 
   @override
   Widget build(BuildContext context) {
-    final members = ref.watch(householdMembersProvider);
-    final isFamily = members.length > 1;
+    final registeredUsers = CashStorageEngine.getRegisteredUsers();
+    final lastBioEmail = CashStorageEngine.getLastBiometricEmail();
+    final bioUser = lastBioEmail != null
+        ? registeredUsers.where((u) => u.email.toLowerCase() == lastBioEmail).firstOrNull
+        : registeredUsers.firstOrNull;
 
     return Scaffold(
       body: SafeArea(
@@ -1295,95 +1656,131 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 children: [
                   InstagramStoryLogoButton(size: 64, onTap: () {}),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   const Text('Cash',
                       style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
-                  Container(
-                    margin: const EdgeInsets.only(top: 6),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      isFamily
-                          ? 'Modo Familiar Activo (${members.length} integrantes)'
-                          : 'Modo Personal Activo (1 integrante registrado)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
+                  const Text(
+                    'Control financiero personal y familiar',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 20),
 
-                  Card(
-                    elevation: 0,
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(22),
-                      side: BorderSide(
-                        color: Theme.of(context).colorScheme.primary.withOpacity(0.35),
+                  // Selector: Iniciar Sesión vs Crear Cuenta Nueva
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment<bool>(
+                        value: false,
+                        icon: Icon(Icons.login, size: 18),
+                        label: Text('Iniciar Sesión'),
                       ),
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(22),
-                      onTap: _scanningFingerprint ? null : _authenticateWithFingerprint,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-                        child: Column(
-                          children: [
-                            AnimatedScale(
-                              scale: _scanningFingerprint ? 1.18 : 1.0,
-                              duration: const Duration(milliseconds: 250),
-                              child: Container(
-                                padding: const EdgeInsets.all(14),
+                      ButtonSegment<bool>(
+                        value: true,
+                        icon: Icon(Icons.person_add_alt_1, size: 18),
+                        label: Text('Crear Cuenta'),
+                      ),
+                    ],
+                    selected: {_isRegisterMode},
+                    onSelectionChanged: (s) => setState(() {
+                      _isRegisterMode = s.first;
+                      _errorMsg = null;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Tarjeta de Huella Digital (Solo aparece si ya hay una cuenta registrada en el dispositivo)
+                  if (!_isRegisterMode && bioUser != null) ...[
+                    Card(
+                      elevation: 0,
+                      color: Theme.of(context).colorScheme.primaryContainer,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        side: BorderSide(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.35),
+                        ),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _scanningFingerprint
+                            ? null
+                            : _loginWithBiometricFingerprint,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 16, horizontal: 16),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).colorScheme.primary,
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(
-                                  Icons.fingerprint,
-                                  size: 42,
-                                  color: Colors.white,
+                                child: const Icon(Icons.fingerprint,
+                                    size: 30, color: Colors.white),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _scanningFingerprint
+                                          ? 'Verificando huella...'
+                                          : 'Entrar con Huella Digital',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    Text(
+                                      'Cuenta vinculada: ${bioUser.fullName} (${bioUser.email})',
+                                      style: const TextStyle(fontSize: 11),
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              _scanningFingerprint
-                                  ? 'Verificando huella digital...'
-                                  : 'Ingresar con Huella Digital',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            const Text(
-                              'Acceso biométrico en 1 toque',
-                              style: TextStyle(fontSize: 11),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 14),
+                  ],
 
+                  // Formulario Real de Registro o Login
                   Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20)),
                     child: Padding(
                       padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          Text(
+                            _isRegisterMode
+                                ? 'Crear mi Cuenta desde Cero'
+                                : 'Ingresa con tus Credenciales',
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 14),
+                          if (_isRegisterMode) ...[
+                            TextField(
+                              controller: _nameCtrl,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: const InputDecoration(
+                                labelText: 'Tu Nombre Completo',
+                                hintText: 'Ej. Cristhian Muñoz',
+                                prefixIcon: Icon(Icons.person_outline),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           TextField(
                             controller: _emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
                             decoration: const InputDecoration(
                               labelText: 'Correo Electrónico',
+                              hintText: 'tu@correo.com',
                               prefixIcon: Icon(Icons.email_outlined),
                             ),
                           ),
@@ -1396,57 +1793,66 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               prefixIcon: Icon(Icons.lock_outline),
                             ),
                           ),
-                          const SizedBox(height: 16),
-                          FilledButton(
-                            onPressed: () =>
-                                _login('Titular de Cuenta', _emailCtrl.text, 'Usuario'),
+                          if (_isRegisterMode) ...[
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _confirmPassCtrl,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                labelText: 'Confirmar Contraseña',
+                                prefixIcon: Icon(Icons.verified_user_outlined),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              title: const Text(
+                                'Soy el Administrador / Desarrollador de Cash',
+                                style: TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: const Text(
+                                'Habilita la consola para publicar historias diarias de 5s',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                              value: _registerAsAppAdmin,
+                              onChanged: (v) => setState(
+                                  () => _registerAsAppAdmin = v ?? false),
+                            ),
+                          ],
+                          if (_errorMsg != null) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                _errorMsg!,
+                                style: const TextStyle(
+                                    color: Colors.red,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 18),
+                          FilledButton.icon(
+                            onPressed: _submitAuth,
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
-                            child: const Text('Entrar a mi Cuenta'),
+                            icon: Icon(_isRegisterMode
+                                ? Icons.check_circle_outline
+                                : Icons.login),
+                            label: Text(_isRegisterMode
+                                ? 'Registrarme y Empezar en \$0.00'
+                                : 'Iniciar Sesión'),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text('Seleccionar Perfil de Prueba:',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: ListTile(
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: const Text('Entrar como Usuario / Cliente',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text(
-                          'Solo ve las historias de 5s. No puede subir historias.'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                      onTap: () =>
-                          _login('Titular de Cuenta', 'usuario@cash.com', 'Usuario'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(color: Colors.amber.shade700),
-                    ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.amber.shade700,
-                        child: const Icon(Icons.admin_panel_settings, color: Colors.white),
-                      ),
-                      title: const Text('Entrar como Desarrollador / SuperAdmin',
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: const Text(
-                          'Habilita la consola para cargar las historias diarias de 5s.'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-                      onTap: () => _login(
-                          'Cristhian (SuperAdmin App)', 'admin@cashapp.com', 'SuperAdmin'),
                     ),
                   ),
                 ],
@@ -1460,7 +1866,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 }
 
 // ============================================================================
-// SHELL PRINCIPAL DE 4 PESTAÑAS CON EL 100% DE LAS FUNCIONALIDADES
+// SHELL PRINCIPAL DE 4 PESTAÑAS CON PERSISTENCIA REAL
 // ============================================================================
 class CompleteHomeShell extends ConsumerWidget {
   const CompleteHomeShell({super.key});
@@ -1482,7 +1888,7 @@ class CompleteHomeShell extends ConsumerWidget {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content: Text(
-                    '✓ Historia oficial de 5s publicada. El anillo estilo Instagram ya está activo.')),
+                    '✓ Historia publicada y guardada permanentemente.')),
           );
         },
       ),
@@ -1492,7 +1898,7 @@ class CompleteHomeShell extends ConsumerWidget {
   void _openInvoiceScanner(BuildContext context) {
     showAdaptiveSheetOrDialog(
       context: context,
-      child: const SmartInvoiceScannerModal(),
+      child: const RealInvoiceScannerModal(),
     );
   }
 
@@ -1544,16 +1950,19 @@ class CompleteHomeShell extends ConsumerWidget {
                         Row(
                           children: [
                             const Text('Cash',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 18)),
                             const SizedBox(width: 8),
                             Flexible(
                               child: Container(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: unseenCount > 0
                                       ? const Color(0xFFF43F5E).withOpacity(0.14)
-                                      : Theme.of(context).colorScheme.primaryContainer,
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .primaryContainer,
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -1566,7 +1975,9 @@ class CompleteHomeShell extends ConsumerWidget {
                                     fontWeight: FontWeight.bold,
                                     color: unseenCount > 0
                                         ? const Color(0xFFE11D48)
-                                        : Theme.of(context).colorScheme.onPrimaryContainer,
+                                        : Theme.of(context)
+                                            .colorScheme
+                                            .onPrimaryContainer,
                                   ),
                                 ),
                               ),
@@ -1575,10 +1986,11 @@ class CompleteHomeShell extends ConsumerWidget {
                         ),
                         Text(
                           isFamily
-                              ? 'Modo Familiar Automático (${members.length} miembros)'
-                              : 'Modo Personal Automático (1 usuario)',
+                              ? '${session?.fullName} • Modo Familiar (${members.length} miembros)'
+                              : '${session?.fullName} • Modo Personal',
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 11, color: Colors.grey),
                         ),
                       ],
                     ),
@@ -1587,13 +1999,11 @@ class CompleteHomeShell extends ConsumerWidget {
               ],
             ),
             actions: [
-              // Botón de Escáner de Facturas XML/OCR siempre a un toque en el AppBar
               IconButton(
-                tooltip: 'Escanear Factura XML / OCR (IVA 15% & Deducibles)',
+                tooltip: 'Lector Real de Facturas XML (SRI) / OCR',
                 icon: const Icon(Icons.document_scanner_outlined),
                 onPressed: () => _openInvoiceScanner(context),
               ),
-              // Consola de Historias exclusiva para el Desarrollador / SuperAdmin
               if (isSuperAdmin)
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
@@ -1605,18 +2015,20 @@ class CompleteHomeShell extends ConsumerWidget {
                     ),
                     onPressed: () => _openSuperAdminStoryCreator(context),
                     icon: const Icon(Icons.admin_panel_settings, size: 16),
-                    label: const Text('+ Subir Tip 5s', style: TextStyle(fontSize: 11)),
+                    label: const Text('+ Tip 5s', style: TextStyle(fontSize: 11)),
                   ),
                 ),
               IconButton(
                 tooltip: isDark ? 'Modo Claro' : 'Modo Oscuro',
                 icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
-                onPressed: () => ref.read(isDarkModeProvider.notifier).state = !isDark,
+                onPressed: () =>
+                    ref.read(isDarkModeProvider.notifier).state = !isDark,
               ),
               IconButton(
-                tooltip: 'Cambiar perfil / Bloquear con Huella',
-                icon: const Icon(Icons.lock_outline),
-                onPressed: () => ref.read(authSessionProvider.notifier).state = null,
+                tooltip: 'Cerrar sesión',
+                icon: const Icon(Icons.logout),
+                onPressed: () =>
+                    ref.read(authSessionProvider.notifier).state = null,
               ),
             ],
           ),
@@ -1626,12 +2038,13 @@ class CompleteHomeShell extends ConsumerWidget {
                 NavigationRail(
                   extended: constraints.maxWidth >= 1150,
                   selectedIndex: navIdx,
-                  onDestinationSelected: (i) => ref.read(navIndexProvider.notifier).state = i,
+                  onDestinationSelected: (i) =>
+                      ref.read(navIndexProvider.notifier).state = i,
                   destinations: const [
                     NavigationRailDestination(
                       icon: Icon(Icons.wb_sunny_outlined),
                       selectedIcon: Icon(Icons.wb_sunny),
-                      label: Text('Hoy & Facturas OCR'),
+                      label: Text('Hoy & Facturas XML'),
                     ),
                     NavigationRailDestination(
                       icon: Icon(Icons.account_balance_wallet_outlined),
@@ -1665,15 +2078,19 @@ class CompleteHomeShell extends ConsumerWidget {
               ? null
               : NavigationBar(
                   selectedIndex: navIdx,
-                  onDestinationSelected: (i) => ref.read(navIndexProvider.notifier).state = i,
+                  onDestinationSelected: (i) =>
+                      ref.read(navIndexProvider.notifier).state = i,
                   destinations: const [
-                    NavigationDestination(icon: Icon(Icons.wb_sunny_outlined), label: 'Hoy'),
                     NavigationDestination(
-                        icon: Icon(Icons.account_balance_wallet_outlined), label: 'Billeteras'),
+                        icon: Icon(Icons.wb_sunny_outlined), label: 'Hoy'),
+                    NavigationDestination(
+                        icon: Icon(Icons.account_balance_wallet_outlined),
+                        label: 'Billeteras'),
                     NavigationDestination(
                         icon: Icon(Icons.insights_outlined), label: 'Copiloto'),
                     NavigationDestination(
-                        icon: Icon(Icons.group_add_outlined), label: 'Familia & Plan'),
+                        icon: Icon(Icons.group_add_outlined),
+                        label: 'Familia & Plan'),
                   ],
                 ),
           floatingActionButton: FloatingActionButton.extended(
@@ -1688,101 +2105,102 @@ class CompleteHomeShell extends ConsumerWidget {
 }
 
 // ============================================================================
-// MODAL RESTAURADO: ESCÁNER INTELIGENTE DE FACTURAS (OCR / XML SRI + IVA 15%)
+// LECTOR REAL DE FACTURAS ELECTRÓNICAS XML (SRI ECUADOR) Y FACTURA MANUAL
 // ============================================================================
-class SmartInvoiceScannerModal extends ConsumerStatefulWidget {
-  const SmartInvoiceScannerModal({super.key});
+class RealInvoiceScannerModal extends ConsumerStatefulWidget {
+  const RealInvoiceScannerModal({super.key});
   @override
-  ConsumerState<SmartInvoiceScannerModal> createState() => _SmartInvoiceScannerModalState();
+  ConsumerState<RealInvoiceScannerModal> createState() =>
+      _RealInvoiceScannerModalState();
 }
 
-class _SmartInvoiceScannerModalState extends ConsumerState<SmartInvoiceScannerModal> {
-  final _merchantCtrl = TextEditingController(text: 'Corporación Favorita - Supermaxi');
-  final _totalCtrl = TextEditingController(text: '115.00');
-  String _selectedAccount = 'Billetera Digital (Payphone / Deuna)';
+class _RealInvoiceScannerModalState
+    extends ConsumerState<RealInvoiceScannerModal> {
+  final _xmlPasteCtrl = TextEditingController();
+  final _merchantCtrl = TextEditingController();
+  final _totalCtrl = TextEditingController();
+  String? _selectedAccount;
+  String? _selectedCategory;
+
+  void _parseSriXml(String xmlContent) {
+    final razonMatch =
+        RegExp(r'<razonSocial>(.*?)</razonSocial>', caseSensitive: false)
+            .firstMatch(xmlContent);
+    final importeMatch =
+        RegExp(r'<importeTotal>(.*?)</importeTotal>', caseSensitive: false)
+            .firstMatch(xmlContent);
+
+    setState(() {
+      if (razonMatch != null) {
+        _merchantCtrl.text = razonMatch.group(1)!.trim();
+      }
+      if (importeMatch != null) {
+        _totalCtrl.text = importeMatch.group(1)!.trim();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
     final accounts = ref.watch(accountsProvider);
+    final categories =
+        ref.watch(categoriesProvider).where((c) => c.type == 2).toList();
     final members = ref.watch(householdMembersProvider);
-    final total = double.tryParse(_totalCtrl.text) ?? 0.0;
+
+    final total = double.tryParse(_totalCtrl.text.replaceAll(',', '.')) ?? 0.0;
     final subTotal = total / 1.15;
     final iva15 = total - subTotal;
 
-    final lower = _merchantCtrl.text.toLowerCase();
-    final detectedCategory = lower.contains('super') || lower.contains('maxi')
-        ? 'Supermercado y Alimentación'
-        : lower.contains('farmacia') || lower.contains('salud') || lower.contains('fybeca')
-            ? 'Educación y Salud'
-            : 'Servicios Básicos (Luz/Agua/Net)';
-
-    final deductibleTag = detectedCategory == 'Supermercado y Alimentación'
-        ? 'Rubro Deducible SRI: Alimentación'
-        : detectedCategory == 'Educación y Salud'
-            ? 'Rubro Deducible SRI: Salud / Educación'
-            : 'Rubro Deducible SRI: Vivienda';
-
-    if (!accounts.any((a) => a.name == _selectedAccount)) {
-      _selectedAccount = accounts.first.name;
+    if (_selectedAccount == null ||
+        !accounts.any((a) => a.name == _selectedAccount)) {
+      _selectedAccount = accounts.isNotEmpty ? accounts.first.name : null;
+    }
+    if (_selectedCategory == null ||
+        !categories.any((c) => c.name == _selectedCategory)) {
+      _selectedCategory = categories.isNotEmpty ? categories.first.name : null;
     }
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
+        const Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.document_scanner, color: Colors.teal),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
+            Icon(Icons.receipt_long, color: Colors.teal),
+            SizedBox(width: 10),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Escáner de Factura (XML / OCR)',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text('Desglosa IVA 15% y clasifica gastos deducibles',
+                  Text('Lector Real de Facturas (XML SRI / Manual)',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(
+                      'Pega el XML de tu factura electrónica o ingresa el comercio y total',
                       style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ],
               ),
             ),
           ],
         ),
-        const Divider(height: 24),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            ActionChip(
-              avatar: const Icon(Icons.shopping_cart, size: 16),
-              label: const Text('Demo: Supermaxi (\$115)'),
-              onPressed: () => setState(() {
-                _merchantCtrl.text = 'Corporación Favorita - Supermaxi';
-                _totalCtrl.text = '115.00';
-              }),
-            ),
-            ActionChip(
-              avatar: const Icon(Icons.local_pharmacy, size: 16),
-              label: const Text('Demo: Fybeca (\$46)'),
-              onPressed: () => setState(() {
-                _merchantCtrl.text = 'Farmacias Fybeca S.A. - Medicinas';
-                _totalCtrl.text = '46.00';
-              }),
-            ),
-          ],
+        const Divider(height: 22),
+        TextField(
+          controller: _xmlPasteCtrl,
+          maxLines: 2,
+          onChanged: _parseSriXml,
+          decoration: const InputDecoration(
+            labelText: 'Opcional: Pega aquí el contenido XML de la factura SRI',
+            hintText: '<factura>...<razonSocial>Comercio</razonSocial><importeTotal>45.00</importeTotal>...',
+            prefixIcon: Icon(Icons.code),
+          ),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
         TextField(
           controller: _merchantCtrl,
           onChanged: (_) => setState(() {}),
           decoration: const InputDecoration(
-            labelText: 'Razón Social / Comercio Detectado',
+            labelText: 'Comercio / Emisor de la Factura',
             prefixIcon: Icon(Icons.storefront),
           ),
         ),
@@ -1797,41 +2215,49 @@ class _SmartInvoiceScannerModalState extends ConsumerState<SmartInvoiceScannerMo
           ),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _selectedAccount,
-          isExpanded: true,
-          decoration: const InputDecoration(labelText: 'Pagado con (Cuenta o Billetera)'),
-          items: accounts
-              .map((a) => DropdownMenuItem(
-                    value: a.name,
-                    child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _selectedAccount = v!),
-        ),
+        if (accounts.isNotEmpty)
+          DropdownButtonFormField<String>(
+            value: _selectedAccount,
+            isExpanded: true,
+            decoration:
+                const InputDecoration(labelText: 'Cuenta o Billetera de Pago'),
+            items: accounts
+                .map((a) => DropdownMenuItem(
+                      value: a.name,
+                      child: Text('${a.name} (${a.type})',
+                          overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedAccount = v),
+          ),
+        const SizedBox(height: 12),
+        if (categories.isNotEmpty)
+          DropdownButtonFormField<String>(
+            value: _selectedCategory,
+            isExpanded: true,
+            decoration: const InputDecoration(
+                labelText: 'Rubro de Gasto / Deducible'),
+            items: categories
+                .map((c) => DropdownMenuItem(
+                      value: c.name,
+                      child: Text(c.name, overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedCategory = v),
+          ),
         const SizedBox(height: 14),
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.teal.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.teal.withOpacity(0.4)),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                  'Subtotal: \$${subTotal.toStringAsFixed(2)}  •  IVA (15%): \$${iva15.toStringAsFixed(2)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              const SizedBox(height: 4),
-              Text('Categoría IA: $detectedCategory', style: const TextStyle(fontSize: 12)),
-              Text('✓ $deductibleTag',
-                  style: const TextStyle(
-                      color: Colors.teal, fontWeight: FontWeight.bold, fontSize: 12)),
-            ],
+          child: Text(
+            'Desglose IVA (15%): Subtotal \$${subTotal.toStringAsFixed(2)} USD  +  IVA \$${iva15.toStringAsFixed(2)} USD',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           ),
         ),
-        const SizedBox(height: 22),
+        const SizedBox(height: 20),
         Row(
           children: [
             Expanded(
@@ -1848,38 +2274,50 @@ class _SmartInvoiceScannerModalState extends ConsumerState<SmartInvoiceScannerMo
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14)),
-                onPressed: () {
-                  if (total <= 0) return;
-                  final list = ref.read(transactionsListProvider);
-                  ref.read(transactionsListProvider.notifier).state = [
-                    TxItem(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      description:
-                          'Factura: ${_merchantCtrl.text} (IVA: \$${iva15.toStringAsFixed(2)})',
-                      amount: total,
-                      type: 2,
-                      categoryName: detectedCategory,
-                      accountName: _selectedAccount,
-                      memberName: members.first.name,
-                    ),
-                    ...list,
-                  ];
+                onPressed: () async {
+                  if (total <= 0 ||
+                      _selectedAccount == null ||
+                      _selectedCategory == null ||
+                      user == null) return;
 
-                  ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                  final merchant = _merchantCtrl.text.trim().isEmpty
+                      ? 'Factura Electrónica'
+                      : _merchantCtrl.text.trim();
+
+                  final newTx = TxItem(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    description:
+                        '$merchant (IVA: \$${iva15.toStringAsFixed(2)})',
+                    amount: total,
+                    type: 2,
+                    categoryName: _selectedCategory!,
+                    accountName: _selectedAccount!,
+                    memberName: members.isNotEmpty
+                        ? members.first.name
+                        : user.fullName,
+                  );
+
+                  final updatedTx = [
+                    newTx,
+                    ...ref.read(transactionsListProvider)
+                  ];
+                  ref.read(transactionsListProvider.notifier).state = updatedTx;
+                  await CashStorageEngine.saveTransactions(
+                      user.email, updatedTx);
+
+                  final updatedAcc = accounts.map((acc) {
                     if (acc.name == _selectedAccount) {
                       return acc.copyWith(balance: acc.balance - total);
                     }
                     return acc;
                   }).toList();
+                  ref.read(accountsProvider.notifier).state = updatedAcc;
+                  await CashStorageEngine.saveAccounts(user.email, updatedAcc);
 
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('✓ Factura importada y descontada del saldo.')),
-                  );
+                  if (context.mounted) Navigator.pop(context);
                 },
-                icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: const Text('Importar Factura'),
+                icon: const Icon(Icons.check, size: 18),
+                label: const Text('Guardar Factura Real'),
               ),
             ),
           ],
@@ -1890,7 +2328,7 @@ class _SmartInvoiceScannerModalState extends ConsumerState<SmartInvoiceScannerMo
 }
 
 // ============================================================================
-// PESTAÑA 1: "HOY" (BARRA MÁGICA 3S + ESCÁNER FACTURAS + DESGLOSE BILLETERA + FILTROS)
+// PESTAÑA 1: "HOY" (DATOS REALES DEL USUARIO + OPCIÓN DE BORRAR MOVIMIENTOS)
 // ============================================================================
 class TodayDashboardView extends ConsumerStatefulWidget {
   const TodayDashboardView({super.key});
@@ -1902,23 +2340,28 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
   final _magicInputCtrl = TextEditingController();
   String? _selectedAuthor;
 
-  void _executeMagicInput(String rawInput) {
+  Future<void> _executeMagicInput(String rawInput) async {
+    final user = ref.read(authSessionProvider);
+    if (user == null) return;
     final accounts = ref.read(accountsProvider);
+    final categories = ref.read(categoriesProvider);
     final members = ref.read(householdMembersProvider);
-    final parsed = SmartInputParser.parse(rawInput, accounts);
+    final parsed = SmartInputParser.parse(rawInput, accounts, categories);
 
     if (parsed == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Escribe un concepto y un monto. Ejemplo: "Almuerzo 8.50 deuna"'),
+          content: Text(
+              'Escribe concepto y monto. Ejemplo: "Almuerzo 8.50 deuna" o "Sueldo 1200"'),
         ),
       );
       return;
     }
 
-    final author = _selectedAuthor ?? members.first.name;
+    final author = _selectedAuthor ??
+        (members.isNotEmpty ? members.first.name : user.fullName);
     final txList = ref.read(transactionsListProvider);
-    ref.read(transactionsListProvider.notifier).state = [
+    final updatedTx = [
       TxItem(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         description: parsed.description,
@@ -1930,22 +2373,57 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
       ),
       ...txList,
     ];
+    ref.read(transactionsListProvider.notifier).state = updatedTx;
+    await CashStorageEngine.saveTransactions(user.email, updatedTx);
 
-    ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+    final updatedAcc = accounts.map((acc) {
       if (acc.name == parsed.accountName) {
         final delta = parsed.type == 1 ? parsed.amount : -parsed.amount;
         return acc.copyWith(balance: acc.balance + delta);
       }
       return acc;
     }).toList();
+    ref.read(accountsProvider.notifier).state = updatedAcc;
+    await CashStorageEngine.saveAccounts(user.email, updatedAcc);
 
     _magicInputCtrl.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            '✓ Anotado por $author: ${parsed.description} (\$${parsed.amount.toStringAsFixed(2)} USD)'),
-      ),
-    );
+  }
+
+  Future<void> _deleteTransactionAndRevertBalance(TxItem tx) async {
+    final user = ref.read(authSessionProvider);
+    if (user == null) return;
+
+    final updatedTx = ref
+        .read(transactionsListProvider)
+        .where((item) => item.id != tx.id)
+        .toList();
+    ref.read(transactionsListProvider.notifier).state = updatedTx;
+    await CashStorageEngine.saveTransactions(user.email, updatedTx);
+
+    final accounts = ref.read(accountsProvider);
+    final updatedAcc = accounts.map((acc) {
+      if (tx.type == 3) {
+        if (acc.name == tx.accountName) {
+          return acc.copyWith(balance: acc.balance + tx.amount);
+        }
+        if (acc.name == tx.destinationAccountName) {
+          return acc.copyWith(balance: acc.balance - tx.amount);
+        }
+      } else if (acc.name == tx.accountName) {
+        final revertDelta = tx.type == 1 ? -tx.amount : tx.amount;
+        return acc.copyWith(balance: acc.balance + revertDelta);
+      }
+      return acc;
+    }).toList();
+    ref.read(accountsProvider.notifier).state = updatedAcc;
+    await CashStorageEngine.saveAccounts(user.email, updatedAcc);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Movimiento eliminado y saldo actualizado.')),
+      );
+    }
   }
 
   @override
@@ -1959,13 +2437,16 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
     final searchQuery = ref.watch(searchQueryProvider);
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
-    if (_selectedAuthor == null || !members.any((m) => m.name == _selectedAuthor)) {
+    if (members.isNotEmpty &&
+        (_selectedAuthor == null ||
+            !members.any((m) => m.name == _selectedAuthor))) {
       _selectedAuthor = members.first.name;
     }
 
     final totalBalance = accounts.fold(0.0, (s, a) => s + a.balance);
     final bankBalance = accounts
-        .where((a) => a.type == 'Banco' || a.type == 'Ahorro' || a.type == 'Cooperativa')
+        .where((a) =>
+            a.type == 'Banco' || a.type == 'Ahorro' || a.type == 'Cooperativa')
         .fold(0.0, (s, a) => s + a.balance);
     final digitalWalletBalance = accounts
         .where((a) => a.type == 'Billetera Digital')
@@ -1973,23 +2454,28 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
     final cashBalance =
         accounts.where((a) => a.type == 'Efectivo').fold(0.0, (s, a) => s + a.balance);
 
-    final income = allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
-    final expense = allTx.where((t) => t.type == 2).fold(0.0, (s, t) => s + t.amount);
-    final savingsRate = income > 0 ? ((income - expense) / income * 100).clamp(0.0, 100.0) : 0.0;
-    final healthScore = (savingsRate * 1.4).clamp(45.0, 98.0).toInt();
+    final income =
+        allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
+    final expense =
+        allTx.where((t) => t.type == 2).fold(0.0, (s, t) => s + t.amount);
+    final savingsRate =
+        income > 0 ? ((income - expense) / income * 100).clamp(0.0, 100.0) : 0.0;
 
     final pendingBills =
         bills.where((b) => !b.isPaid).fold(0.0, (s, b) => s + b.amount);
-    final freeMonthMoney = (totalBalance - pendingBills).clamp(0.0, double.infinity);
+    final freeMonthMoney =
+        (totalBalance - pendingBills).clamp(0.0, double.infinity);
 
     final now = DateTime.now();
     final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
     final remainingDays = (daysInMonth - now.day + 1).clamp(1, 31);
     final safeToSpendToday = freeMonthMoney / remainingDays;
 
-    final txAuthors = allTx.where((t) => t.type == 2).map((t) => t.memberName).toSet().toList();
+    final txAuthors =
+        allTx.where((t) => t.type == 2).map((t) => t.memberName).toSet().toList();
     final filteredTx = allTx.where((t) {
-      final matchesMember = selectedMember == null || t.memberName == selectedMember;
+      final matchesMember =
+          selectedMember == null || t.memberName == selectedMember;
       final matchesSearch = searchQuery.isEmpty ||
           t.description.toLowerCase().contains(searchQuery.toLowerCase()) ||
           t.categoryName.toLowerCase().contains(searchQuery.toLowerCase()) ||
@@ -1997,21 +2483,15 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
       return matchesMember && matchesSearch;
     }).toList();
 
-    final quickPresets = [
-      ('☕ Café / Snack \$3.50', 'Café y Snack 3.50 deuna'),
-      ('🚕 Taxi / Uber \$4.50', 'Taxi 4.50 efectivo'),
-      ('🍔 Almuerzo \$8.00', 'Almuerzo 8.00 deuna'),
-      ('🛒 Tienda \$15.00', 'Compra Tienda 15.00 efectivo'),
-    ];
-
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        // 1. TARJETA PRINCIPAL: DISPONIBLE PARA HOY + SALUD FINANCIERA + DESGLOSE BILLETERA DIGITAL
+        // 1. TARJETA PRINCIPAL DE DISPONIBLE DIARIO Y SALDOS REALES
         Card(
           elevation: 0,
           color: Theme.of(context).colorScheme.primaryContainer,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -2028,14 +2508,16 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                       children: [
                         Text(
                           isFamily
-                              ? 'Disponible para gastar hoy en familia:'
-                              : 'Disponible para gastar hoy con tranquilidad:',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              ? 'Disponible para gastar hoy en familia ($remainingDays días restantes):'
+                              : 'Disponible para gastar hoy ($remainingDays días restantes):',
+                          style: const TextStyle(
+                              fontSize: 13, fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           currency.format(safeToSpendToday),
-                          style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              fontSize: 36, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         Wrap(
@@ -2056,19 +2538,26 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                       ],
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surface
+                            .withOpacity(0.9),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Column(
                         children: [
-                          const Text('Salud Financiera',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                          Text('$healthScore / 100',
+                          const Text('Patrimonio Total',
+                              style: TextStyle(
+                                  fontSize: 11, fontWeight: FontWeight.bold)),
+                          Text(currency.format(totalBalance),
                               style: const TextStyle(
-                                  fontSize: 20, fontWeight: FontWeight.bold, color: Colors.teal)),
-                          Text('Ahorro: ${savingsRate.toStringAsFixed(1)}%',
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.teal)),
+                          Text('Tasa Ahorro: ${savingsRate.toStringAsFixed(0)}%',
                               style: const TextStyle(fontSize: 11)),
                         ],
                       ),
@@ -2076,7 +2565,6 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                   ],
                 ),
                 const Divider(height: 22),
-                // Desglose por tipo de saldo (Bancos vs Billetera Digital vs Efectivo)
                 Wrap(
                   spacing: 10,
                   runSpacing: 8,
@@ -2105,10 +2593,11 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
         ),
         const SizedBox(height: 16),
 
-        // 2. BARRA MÁGICA DE 3 SEGUNDOS + ACCESO A ESCÁNER DE FACTURAS XML/OCR
+        // 2. BARRA DE REGISTRO RÁPIDO EN 3 SEGUNDOS
         Card(
           elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -2123,18 +2612,19 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                     const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.auto_awesome, color: Colors.teal, size: 18),
+                        Icon(Icons.bolt, color: Colors.teal, size: 18),
                         SizedBox(width: 6),
                         Text(
-                          'Registro Rápido en 3 Segundos',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          'Registro Rápido en 1 Línea',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
                         ),
                       ],
                     ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (isFamily)
+                        if (isFamily && members.isNotEmpty)
                           DropdownButton<String>(
                             value: _selectedAuthor,
                             underline: const SizedBox.shrink(),
@@ -2146,17 +2636,20 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                                           style: const TextStyle(fontSize: 12)),
                                     ))
                                 .toList(),
-                            onChanged: (v) => setState(() => _selectedAuthor = v),
+                            onChanged: (v) =>
+                                setState(() => _selectedAuthor = v),
                           ),
                         const SizedBox(width: 6),
                         TextButton.icon(
-                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                          style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact),
                           onPressed: () => showAdaptiveSheetOrDialog(
                             context: context,
-                            child: const SmartInvoiceScannerModal(),
+                            child: const RealInvoiceScannerModal(),
                           ),
-                          icon: const Icon(Icons.document_scanner_outlined, size: 16),
-                          label: const Text('Escanear Factura', style: TextStyle(fontSize: 12)),
+                          icon: const Icon(Icons.receipt_long, size: 16),
+                          label: const Text('Factura XML',
+                              style: TextStyle(fontSize: 12)),
                         ),
                       ],
                     ),
@@ -2170,35 +2663,23 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                         controller: _magicInputCtrl,
                         onSubmitted: _executeMagicInput,
                         decoration: const InputDecoration(
-                          hintText: 'Ej: "Almuerzo 8.50 deuna" o "Taxi 4 efectivo"',
+                          hintText:
+                              'Escribe ej: "Sueldo 1500" o "Almuerzo 6.50 deuna"',
                           isDense: true,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
-                      onPressed: () => _executeMagicInput(_magicInputCtrl.text),
+                      onPressed: () =>
+                          _executeMagicInput(_magicInputCtrl.text),
                       style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                       ),
                       child: const Icon(Icons.send, size: 18),
                     ),
                   ],
-                ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: quickPresets
-                        .map((p) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ActionChip(
-                                label: Text(p.$1, style: const TextStyle(fontSize: 12)),
-                                onPressed: () => _executeMagicInput(p.$2),
-                              ),
-                            ))
-                        .toList(),
-                  ),
                 ),
               ],
             ),
@@ -2206,11 +2687,11 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
         ),
         const SizedBox(height: 18),
 
-        // 3. BUSCADOR Y FILTRO POR INTEGRANTE
+        // 3. HISTORIAL DE MOVIMIENTOS REALES DEL USUARIO
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Historial de Movimientos',
+            const Text('Mis Movimientos Reales',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
             Text('${filteredTx.length} registros',
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -2225,8 +2706,9 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
               ChoiceChip(
                 label: Text('Todos (${currency.format(expense)})'),
                 selected: selectedMember == null,
-                onSelected: (_) =>
-                    ref.read(selectedMemberFilterProvider.notifier).state = null,
+                onSelected: (_) => ref
+                    .read(selectedMemberFilterProvider.notifier)
+                    .state = null,
               ),
               ...txAuthors.map((m) {
                 final mSpent = allTx
@@ -2243,15 +2725,38 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
           ),
           const SizedBox(height: 8),
         ],
-        TextField(
-          onChanged: (v) => ref.read(searchQueryProvider.notifier).state = v,
-          decoration: const InputDecoration(
-            hintText: 'Buscar por descripción, categoría o billetera...',
-            prefixIcon: Icon(Icons.search),
-            isDense: true,
+        if (allTx.isNotEmpty) ...[
+          TextField(
+            onChanged: (v) => ref.read(searchQueryProvider.notifier).state = v,
+            decoration: const InputDecoration(
+              hintText: 'Buscar por descripción, categoría o cuenta...',
+              prefixIcon: Icon(Icons.search),
+              isDense: true,
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
+          const SizedBox(height: 10),
+        ],
+        if (filteredTx.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  const Icon(Icons.inbox_outlined,
+                      size: 40, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  const Text('Tu cuenta está limpia y lista para usar',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Registra tu saldo inicial en la pestaña "Billeteras" o anota tu primer ingreso/gasto con el botón "+ Registrar".',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ...filteredTx.map((t) {
           final isInc = t.type == 1;
           final isTransfer = t.type == 3;
@@ -2277,14 +2782,30 @@ class _TodayDashboardViewState extends ConsumerState<TodayDashboardView> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                '${t.categoryName} • ${t.accountName} • ${t.memberName}',
+                isTransfer
+                    ? '${t.accountName} → ${t.destinationAccountName ?? ""} • ${DateFormat("dd/MM HH:mm").format(t.date)}'
+                    : '${t.categoryName} • ${t.accountName} • ${t.memberName}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12),
               ),
-              trailing: Text(
-                '${isTransfer ? '⇄ ' : (isInc ? '+' : '-')}${currency.format(t.amount)}',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: fgColor),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${isTransfer ? '⇄ ' : (isInc ? '+' : '-')}${currency.format(t.amount)}',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: fgColor),
+                  ),
+                  IconButton(
+                    tooltip: 'Eliminar movimiento y revertir saldo',
+                    icon: const Icon(Icons.delete_outline,
+                        size: 18, color: Colors.grey),
+                    onPressed: () => _deleteTransactionAndRevertBalance(t),
+                  ),
+                ],
               ),
             ),
           );
@@ -2327,7 +2848,9 @@ class _BalancePill extends StatelessWidget {
             children: [
               Text(label,
                   style: TextStyle(
-                      fontSize: 11, color: highlight ? Colors.teal.shade100 : Colors.grey)),
+                      fontSize: 11,
+                      color:
+                          highlight ? Colors.teal.shade100 : Colors.grey)),
               Text(amount,
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -2342,15 +2865,16 @@ class _BalancePill extends StatelessWidget {
 }
 
 // ============================================================================
-// PESTAÑA 2: BILLETERAS DIGITALES, CUENTAS, PAGOS FIJOS Y PARAMETRIZACIÓN DE RUBROS
+// PESTAÑA 2: BILLETERAS, CUENTAS (EDITAR/CREAR/BORRAR), PAGOS FIJOS Y RUBROS
 // ============================================================================
 class WalletsAndCatalogsView extends ConsumerWidget {
   const WalletsAndCatalogsView({super.key});
 
-  void _openAddAccountModal(BuildContext context, {String defaultType = 'Billetera Digital'}) {
+  void _openAccountForm(BuildContext context,
+      {String defaultType = 'Billetera Digital', AccountModel? existing}) {
     showAdaptiveSheetOrDialog(
       context: context,
-      child: _AddAccountForm(defaultType: defaultType),
+      child: _AccountCrudForm(defaultType: defaultType, existing: existing),
     );
   }
 
@@ -2361,8 +2885,16 @@ class WalletsAndCatalogsView extends ConsumerWidget {
     );
   }
 
+  void _openAddRecurringBillModal(BuildContext context) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: const _AddRecurringBillForm(),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authSessionProvider);
     final accounts = ref.watch(accountsProvider);
     final categories = ref.watch(categoriesProvider);
     final bills = ref.watch(recurringBillsProvider);
@@ -2374,7 +2906,7 @@ class WalletsAndCatalogsView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        // 1. CUENTAS BANCARIAS Y BILLETERAS DIGITALES
+        // 1. CUENTAS BANCARIAS Y BILLETERAS DIGITALES (CREAR, EDITAR SALDO Y BORRAR)
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -2387,13 +2919,14 @@ class WalletsAndCatalogsView extends ConsumerWidget {
               spacing: 8,
               children: [
                 FilledButton.tonalIcon(
-                  onPressed: () =>
-                      _openAddAccountModal(context, defaultType: 'Billetera Digital'),
+                  onPressed: () => _openAccountForm(context,
+                      defaultType: 'Billetera Digital'),
                   icon: const Icon(Icons.qr_code_2, size: 18),
                   label: const Text('+ Billetera Digital'),
                 ),
                 FilledButton.icon(
-                  onPressed: () => _openAddAccountModal(context, defaultType: 'Banco'),
+                  onPressed: () =>
+                      _openAccountForm(context, defaultType: 'Banco'),
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('+ Cuenta'),
                 ),
@@ -2412,49 +2945,116 @@ class WalletsAndCatalogsView extends ConsumerWidget {
                 foregroundColor: isDigital ? Colors.white : null,
                 child: Icon(getAccountTypeIcon(a.type), size: 20),
               ),
-              title: Text(a.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('Opción de Saldo: ${a.type} • ${currency.format(a.balance)}'),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: accounts.length <= 1
-                    ? null
-                    : () {
-                        ref.read(accountsProvider.notifier).state =
-                            accounts.where((item) => item.id != a.id).toList();
-                      },
+              title: Text(a.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle:
+                  Text('Tipo: ${a.type} • Saldo: ${currency.format(a.balance)}'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Editar nombre o saldo de la cuenta',
+                    icon: const Icon(Icons.edit_outlined, color: Colors.teal),
+                    onPressed: () => _openAccountForm(context,
+                        defaultType: a.type, existing: a),
+                  ),
+                  IconButton(
+                    tooltip: 'Eliminar cuenta',
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: accounts.length <= 1 || user == null
+                        ? null
+                        : () async {
+                            final updated = accounts
+                                .where((item) => item.id != a.id)
+                                .toList();
+                            ref.read(accountsProvider.notifier).state = updated;
+                            await CashStorageEngine.saveAccounts(
+                                user.email, updated);
+                          },
+                  ),
+                ],
               ),
             ),
           );
         }),
         const SizedBox(height: 22),
 
-        // 2. PAGOS FIJOS DEL MES
-        const Text('2. Pagos Fijos y Suscripciones del Mes',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+        // 2. PAGOS FIJOS DEL MES (CREAR, MARCAR PAGADO Y BORRAR)
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('2. Pagos Fijos y Suscripciones del Mes',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
+            FilledButton.tonalIcon(
+              onPressed: () => _openAddRecurringBillModal(context),
+              icon: const Icon(Icons.add_alarm, size: 18),
+              label: const Text('+ Nuevo Pago Fijo'),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
+        if (bills.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'No tienes pagos fijos configurados. Agrega internet, luz, arriendo o colegiaturas con "+ Nuevo Pago Fijo".',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ),
+          ),
         ...bills.map((b) => Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 leading: Icon(b.isPaid ? Icons.check_circle : Icons.schedule,
                     color: b.isPaid ? Colors.green : Colors.amber.shade800),
-                title: Text(b.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('Vence el día ${b.dueDay} • ${currency.format(b.amount)}'),
-                trailing: b.isPaid
-                    ? const Chip(label: Text('Pagado'))
-                    : FilledButton.tonal(
-                        onPressed: () {
-                          ref.read(recurringBillsProvider.notifier).state = bills
-                              .map((item) =>
-                                  item.id == b.id ? item.copyWith(isPaid: true) : item)
+                title: Text(b.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text(
+                    'Vence el día ${b.dueDay} • ${currency.format(b.amount)}'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (b.isPaid)
+                      const Chip(label: Text('Pagado'))
+                    else
+                      FilledButton.tonal(
+                        onPressed: () async {
+                          if (user == null) return;
+                          final updated = bills
+                              .map((item) => item.id == b.id
+                                  ? item.copyWith(isPaid: true)
+                                  : item)
                               .toList();
+                          ref.read(recurringBillsProvider.notifier).state =
+                              updated;
+                          await CashStorageEngine.saveBills(
+                              user.email, updated);
                         },
-                        child: const Text('Marcar Pagado'),
+                        child: const Text('Pagar'),
                       ),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline,
+                          size: 18, color: Colors.red),
+                      onPressed: () async {
+                        if (user == null) return;
+                        final updated =
+                            bills.where((item) => item.id != b.id).toList();
+                        ref.read(recurringBillsProvider.notifier).state =
+                            updated;
+                        await CashStorageEngine.saveBills(user.email, updated);
+                      },
+                    ),
+                  ],
+                ),
               ),
             )),
         const SizedBox(height: 22),
 
-        // 3. PARAMETRIZACIÓN DE TIPOS DE GASTOS Y PRESUPUESTOS
+        // 3. RUBROS DE GASTO
         Wrap(
           spacing: 10,
           runSpacing: 8,
@@ -2475,8 +3075,9 @@ class WalletsAndCatalogsView extends ConsumerWidget {
           final spent = allTx
               .where((t) => t.type == 2 && t.categoryName == c.name)
               .fold(0.0, (s, t) => s + t.amount);
-          final progress =
-              c.monthlyBudget > 0 ? (spent / c.monthlyBudget).clamp(0.0, 1.0) : 0.0;
+          final progress = c.monthlyBudget > 0
+              ? (spent / c.monthlyBudget).clamp(0.0, 1.0)
+              : 0.0;
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
@@ -2484,8 +3085,11 @@ class WalletsAndCatalogsView extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                      child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold))),
-                  Text('${currency.format(spent)} / ${currency.format(c.monthlyBudget)}',
+                      child: Text(c.name,
+                          style:
+                              const TextStyle(fontWeight: FontWeight.bold))),
+                  Text(
+                      '${currency.format(spent)} / ${currency.format(c.monthlyBudget)}',
                       style: const TextStyle(fontSize: 12)),
                 ],
               ),
@@ -2505,11 +3109,15 @@ class WalletsAndCatalogsView extends ConsumerWidget {
               ),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: expenseCats.length <= 1
+                onPressed: expenseCats.length <= 1 || user == null
                     ? null
-                    : () {
-                        ref.read(categoriesProvider.notifier).state =
-                            categories.where((item) => item.id != c.id).toList();
+                    : () async {
+                        final updated = categories
+                            .where((item) => item.id != c.id)
+                            .toList();
+                        ref.read(categoriesProvider.notifier).state = updated;
+                        await CashStorageEngine.saveCategories(
+                            user.email, updated);
                       },
               ),
             ),
@@ -2517,7 +3125,7 @@ class WalletsAndCatalogsView extends ConsumerWidget {
         }),
         const SizedBox(height: 22),
 
-        // 4. PARAMETRIZACIÓN DE TIPOS DE INGRESOS
+        // 4. RUBROS DE INGRESO
         Wrap(
           spacing: 10,
           runSpacing: 8,
@@ -2539,17 +3147,22 @@ class WalletsAndCatalogsView extends ConsumerWidget {
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor: Colors.green.shade100,
-                  child: Icon(Icons.trending_up, color: Colors.green.shade800, size: 18),
+                  child: Icon(Icons.trending_up,
+                      color: Colors.green.shade800, size: 18),
                 ),
-                title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: const Text('Categoría de Ingreso Activa'),
+                title: Text(c.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: incomeCats.length <= 1
+                  onPressed: incomeCats.length <= 1 || user == null
                       ? null
-                      : () {
-                          ref.read(categoriesProvider.notifier).state =
-                              categories.where((item) => item.id != c.id).toList();
+                      : () async {
+                          final updated = categories
+                              .where((item) => item.id != c.id)
+                              .toList();
+                          ref.read(categoriesProvider.notifier).state = updated;
+                          await CashStorageEngine.saveCategories(
+                              user.email, updated);
                         },
                 ),
               ),
@@ -2559,35 +3172,47 @@ class WalletsAndCatalogsView extends ConsumerWidget {
   }
 }
 
-class _AddAccountForm extends ConsumerStatefulWidget {
+class _AccountCrudForm extends ConsumerStatefulWidget {
   final String defaultType;
-  const _AddAccountForm({required this.defaultType});
+  final AccountModel? existing;
+
+  const _AccountCrudForm({required this.defaultType, this.existing});
 
   @override
-  ConsumerState<_AddAccountForm> createState() => _AddAccountFormState();
+  ConsumerState<_AccountCrudForm> createState() => _AccountCrudFormState();
 }
 
-class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
-  final _nameCtrl = TextEditingController();
-  final _balanceCtrl = TextEditingController(text: '0');
+class _AccountCrudFormState extends ConsumerState<_AccountCrudForm> {
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _balanceCtrl;
   late String _selectedType;
 
   @override
   void initState() {
     super.initState();
-    _selectedType = widget.defaultType;
+    _selectedType = widget.existing?.type ?? widget.defaultType;
+    _nameCtrl = TextEditingController(text: widget.existing?.name ?? '');
+    _balanceCtrl = TextEditingController(
+        text: widget.existing != null
+            ? widget.existing!.balance.toStringAsFixed(2)
+            : '0.00');
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
     final isDigital = _selectedType == 'Billetera Digital';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Nueva Cuenta o Billetera Digital',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(
+          widget.existing != null
+              ? 'Editar Cuenta / Billetera'
+              : 'Nueva Cuenta o Billetera Digital',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
           value: _selectedType,
@@ -2607,9 +3232,12 @@ class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
         TextField(
           controller: _nameCtrl,
           decoration: InputDecoration(
-            labelText:
-                isDigital ? 'Nombre de la Billetera Digital' : 'Nombre de la Cuenta',
-            hintText: isDigital ? 'Ej. Payphone, Deuna, Peigo...' : 'Ej. Banco Pichincha...',
+            labelText: isDigital
+                ? 'Nombre de la Billetera Digital'
+                : 'Nombre de la Cuenta',
+            hintText: isDigital
+                ? 'Ej. Payphone, Deuna, Peigo...'
+                : 'Ej. Banco Pichincha, Produbanco...',
           ),
         ),
         const SizedBox(height: 14),
@@ -2617,7 +3245,7 @@ class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
           controller: _balanceCtrl,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: const InputDecoration(
-            labelText: 'Saldo Disponible Inicial (USD)',
+            labelText: 'Saldo Disponible Actual (USD)',
             prefixIcon: Icon(Icons.attach_money),
           ),
         ),
@@ -2638,22 +3266,137 @@ class _AddAccountFormState extends ConsumerState<_AddAccountForm> {
               child: FilledButton(
                 style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14)),
-                onPressed: () {
-                  if (_nameCtrl.text.trim().isEmpty) return;
-                  final bal = double.tryParse(_balanceCtrl.text) ?? 0.0;
+                onPressed: () async {
+                  if (_nameCtrl.text.trim().isEmpty || user == null) return;
+                  final bal = double.tryParse(
+                          _balanceCtrl.text.replaceAll(',', '.')) ??
+                      0.0;
                   final current = ref.read(accountsProvider);
-                  ref.read(accountsProvider.notifier).state = [
-                    ...current,
-                    AccountModel(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      name: _nameCtrl.text.trim(),
-                      type: _selectedType,
-                      balance: bal,
-                    ),
-                  ];
-                  Navigator.pop(context);
+                  List<AccountModel> updated;
+
+                  if (widget.existing != null) {
+                    updated = current
+                        .map((a) => a.id == widget.existing!.id
+                            ? a.copyWith(
+                                name: _nameCtrl.text.trim(),
+                                type: _selectedType,
+                                balance: bal)
+                            : a)
+                        .toList();
+                  } else {
+                    updated = [
+                      ...current,
+                      AccountModel(
+                        id: DateTime.now().millisecondsSinceEpoch.toString(),
+                        name: _nameCtrl.text.trim(),
+                        type: _selectedType,
+                        balance: bal,
+                      ),
+                    ];
+                  }
+
+                  ref.read(accountsProvider.notifier).state = updated;
+                  await CashStorageEngine.saveAccounts(user.email, updated);
+                  if (context.mounted) Navigator.pop(context);
                 },
                 child: const Text('Guardar'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AddRecurringBillForm extends ConsumerStatefulWidget {
+  const _AddRecurringBillForm();
+  @override
+  ConsumerState<_AddRecurringBillForm> createState() =>
+      _AddRecurringBillFormState();
+}
+
+class _AddRecurringBillFormState extends ConsumerState<_AddRecurringBillForm> {
+  final _titleCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _dueDayCtrl = TextEditingController(text: '10');
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Nuevo Pago Fijo o Suscripción Mensual',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _titleCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Concepto (Ej. Internet, Luz, Arriendo, Colegio)',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _amountCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Monto Mensual (USD)',
+            prefixIcon: Icon(Icons.attach_money),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _dueDayCtrl,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Día de vencimiento del mes (1 al 31)',
+            prefixIcon: Icon(Icons.calendar_today),
+          ),
+        ),
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () async {
+                  final amt =
+                      double.tryParse(_amountCtrl.text.replaceAll(',', '.')) ??
+                          0.0;
+                  final day = (int.tryParse(_dueDayCtrl.text) ?? 10).clamp(1, 31);
+                  if (_titleCtrl.text.trim().isEmpty ||
+                      amt <= 0 ||
+                      user == null) return;
+
+                  final updated = [
+                    ...ref.read(recurringBillsProvider),
+                    RecurringBillModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      title: _titleCtrl.text.trim(),
+                      category: 'Servicios Básicos',
+                      amount: amt,
+                      dueDay: day,
+                    ),
+                  ];
+                  ref.read(recurringBillsProvider.notifier).state = updated;
+                  await CashStorageEngine.saveBills(user.email, updated);
+                  if (context.mounted) Navigator.pop(context);
+                },
+                child: const Text('Guardar Pago Fijo'),
               ),
             ),
           ],
@@ -2681,11 +3424,14 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
   void initState() {
     super.initState();
     _selectedType = widget.defaultType;
-    _budgetCtrl = TextEditingController(text: widget.defaultType == 2 ? '200' : '0');
+    _budgetCtrl =
+        TextEditingController(text: widget.defaultType == 2 ? '200' : '0');
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2695,8 +3441,10 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
         const SizedBox(height: 16),
         SegmentedButton<int>(
           segments: const [
-            ButtonSegment(value: 2, label: Text('Gasto'), icon: Icon(Icons.trending_down)),
-            ButtonSegment(value: 1, label: Text('Ingreso'), icon: Icon(Icons.trending_up)),
+            ButtonSegment(
+                value: 2, label: Text('Gasto'), icon: Icon(Icons.trending_down)),
+            ButtonSegment(
+                value: 1, label: Text('Ingreso'), icon: Icon(Icons.trending_up)),
           ],
           selected: {_selectedType},
           onSelectionChanged: (s) => setState(() => _selectedType = s.first),
@@ -2705,8 +3453,9 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
         TextField(
           controller: _nameCtrl,
           decoration: InputDecoration(
-            labelText:
-                _selectedType == 2 ? 'Nombre del Rubro de Gasto' : 'Nombre del Rubro de Ingreso',
+            labelText: _selectedType == 2
+                ? 'Nombre del Rubro de Gasto'
+                : 'Nombre del Rubro de Ingreso',
           ),
         ),
         if (_selectedType == 2) ...[
@@ -2723,7 +3472,8 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
           DropdownButtonFormField<String>(
             value: _selectedBucket,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Clasificación Regla 50/30/20'),
+            decoration:
+                const InputDecoration(labelText: 'Clasificación Regla 50/30/20'),
             items: [
               'Necesidades (50%)',
               'Deseos / Estilo de Vida (30%)',
@@ -2749,13 +3499,13 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
               child: FilledButton(
                 style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14)),
-                onPressed: () {
-                  if (_nameCtrl.text.trim().isEmpty) return;
-                  final budget =
-                      _selectedType == 2 ? (double.tryParse(_budgetCtrl.text) ?? 0.0) : 0.0;
-                  final current = ref.read(categoriesProvider);
-                  ref.read(categoriesProvider.notifier).state = [
-                    ...current,
+                onPressed: () async {
+                  if (_nameCtrl.text.trim().isEmpty || user == null) return;
+                  final budget = _selectedType == 2
+                      ? (double.tryParse(_budgetCtrl.text) ?? 0.0)
+                      : 0.0;
+                  final updated = [
+                    ...ref.read(categoriesProvider),
                     CategoryModel(
                       id: DateTime.now().millisecondsSinceEpoch.toString(),
                       name: _nameCtrl.text.trim(),
@@ -2764,7 +3514,9 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
                       bucket503020: _selectedBucket,
                     ),
                   ];
-                  Navigator.pop(context);
+                  ref.read(categoriesProvider.notifier).state = updated;
+                  await CashStorageEngine.saveCategories(user.email, updated);
+                  if (context.mounted) Navigator.pop(context);
                 },
                 child: const Text('Guardar Rubro'),
               ),
@@ -2777,16 +3529,18 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
 }
 
 // ============================================================================
-// PESTAÑA 3 RESTAURADA: DIFERIDOS DE TARJETAS, METAS DE AHORRO, COPILOTO 50/30/20 & EXCEL CSV
+// PESTAÑA 3: DIFERIDOS DE TARJETAS, METAS DE AHORRO Y COPILOTO 50/30/20 (CRUD REAL)
 // ============================================================================
 class CopilotCardsAndGoalsView extends ConsumerWidget {
   const CopilotCardsAndGoalsView({super.key});
 
   String _generateCsv(List<TxItem> items) {
     final buffer = StringBuffer();
-    buffer.writeln('Fecha,Tipo,Categoria,Descripcion,Cuenta_Billetera,Miembro,Monto_USD');
+    buffer.writeln(
+        'Fecha,Tipo,Categoria,Descripcion,Cuenta_Billetera,Miembro,Monto_USD');
     for (final t in items) {
-      final tipo = t.type == 1 ? 'INGRESO' : (t.type == 3 ? 'TRANSFERENCIA' : 'GASTO');
+      final tipo =
+          t.type == 1 ? 'INGRESO' : (t.type == 3 ? 'TRANSFERENCIA' : 'GASTO');
       final fecha = DateFormat('yyyy-MM-dd').format(t.date);
       buffer.writeln(
           '$fecha,$tipo,${t.categoryName},${t.description},${t.accountName},${t.memberName},${t.amount.toStringAsFixed(2)}');
@@ -2794,8 +3548,23 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
     return buffer.toString();
   }
 
+  void _openAddInstallmentModal(BuildContext context) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: const _AddInstallmentForm(),
+    );
+  }
+
+  void _openAddGoalModal(BuildContext context) {
+    showAdaptiveSheetOrDialog(
+      context: context,
+      child: const _AddGoalForm(),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(authSessionProvider);
     final subTab = ref.watch(copilotSubTabProvider);
     final installments = ref.watch(installmentsProvider);
     final goals = ref.watch(savingsGoalsProvider);
@@ -2803,21 +3572,24 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
     final categories = ref.watch(categoriesProvider);
     final currency = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
-    final income = allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
+    final income =
+        allTx.where((t) => t.type == 1).fold(0.0, (s, t) => s + t.amount);
     final expenses = allTx.where((t) => t.type == 2).toList();
     final totalExpense = expenses.fold(0.0, (s, e) => s + e.amount);
 
     double needsSpent = 0;
     double wantsSpent = 0;
     for (final e in expenses) {
-      final cat = categories.where((c) => c.name == e.categoryName).firstOrNull;
+      final cat =
+          categories.where((c) => c.name == e.categoryName).firstOrNull;
       if (cat != null && cat.bucket503020.contains('30%')) {
         wantsSpent += e.amount;
       } else {
         needsSpent += e.amount;
       }
     }
-    final savingsActual = (income - totalExpense).clamp(0.0, double.infinity);
+    final savingsActual =
+        (income - totalExpense).clamp(0.0, double.infinity);
 
     final microExpenses = expenses.where((e) => e.amount <= 15.0).toList();
     final microTotal = microExpenses.fold(0.0, (s, e) => s + e.amount);
@@ -2825,7 +3597,6 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 104),
       children: [
-        // Sub-navegación limpia para que todo esté disponible sin saturar la vista
         SegmentedButton<int>(
           segments: const [
             ButtonSegment(
@@ -2845,19 +3616,42 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
             ),
           ],
           selected: {subTab},
-          onSelectionChanged: (s) => ref.read(copilotSubTabProvider.notifier).state = s.first,
+          onSelectionChanged: (s) =>
+              ref.read(copilotSubTabProvider.notifier).state = s.first,
         ),
         const SizedBox(height: 18),
 
-        // SUB-VISTA 0: TARJETAS DE CRÉDITO Y DIFERIDOS (CUOTAS)
+        // SUB-VISTA 0: TARJETAS DE CRÉDITO Y DIFERIDOS REALES
         if (subTab == 0) ...[
-          const Text('Control de Tarjetas de Crédito y Compras Diferidas',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const Text('Seguimiento de cuotas mensuales, fechas de corte y fechas de pago',
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('Mis Compras Diferidas y Tarjetas',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              FilledButton.icon(
+                onPressed: () => _openAddInstallmentModal(context),
+                icon: const Icon(Icons.add_card, size: 18),
+                label: const Text('+ Nuevo Diferido'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (installments.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Aún no has registrado compras diferidas. Usa el botón "+ Nuevo Diferido" para llevar el control de tus cuotas y fechas de corte.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            ),
           ...installments.map((inst) {
-            final progress = (inst.paidMonths / inst.totalMonths).clamp(0.0, 1.0);
+            final progress =
+                (inst.paidMonths / inst.totalMonths).clamp(0.0, 1.0);
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: Padding(
@@ -2865,9 +3659,31 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('${inst.cardName} • ${inst.description}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                              '${inst.cardName} • ${inst.description}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.red),
+                          onPressed: () async {
+                            if (user == null) return;
+                            final updated = installments
+                                .where((i) => i.id != inst.id)
+                                .toList();
+                            ref.read(installmentsProvider.notifier).state =
+                                updated;
+                            await CashStorageEngine.saveInstallments(
+                                user.email, updated);
+                          },
+                        ),
+                      ],
+                    ),
                     Wrap(
                       spacing: 8,
                       runSpacing: 6,
@@ -2880,7 +3696,8 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                         ),
                         Chip(
                           visualDensity: VisualDensity.compact,
-                          label: Text('Cuota: ${currency.format(inst.monthlyQuota)}/mes',
+                          label: Text(
+                              'Cuota: ${currency.format(inst.monthlyQuota)}/mes',
                               style: const TextStyle(fontSize: 11)),
                         ),
                       ],
@@ -2900,14 +3717,20 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                         ),
                         if (inst.paidMonths < inst.totalMonths)
                           FilledButton.tonal(
-                            onPressed: () {
-                              ref.read(installmentsProvider.notifier).state = installments
+                            onPressed: () async {
+                              if (user == null) return;
+                              final updated = installments
                                   .map((item) => item.id == inst.id
-                                      ? item.copyWith(paidMonths: item.paidMonths + 1)
+                                      ? item.copyWith(
+                                          paidMonths: item.paidMonths + 1)
                                       : item)
                                   .toList();
+                              ref.read(installmentsProvider.notifier).state =
+                                  updated;
+                              await CashStorageEngine.saveInstallments(
+                                  user.email, updated);
                             },
-                            child: const Text('Pagar Cuota'),
+                            child: const Text('Registrar Cuota Pagada'),
                           ),
                       ],
                     ),
@@ -2918,15 +3741,37 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
           }),
         ],
 
-        // SUB-VISTA 1: METAS DE AHORRO FAMILIAR
+        // SUB-VISTA 1: METAS DE AHORRO REALES
         if (subTab == 1) ...[
-          const Text('Metas de Ahorro',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          const Text('Objetivos financieros con seguimiento de progreso y abonos rápidos',
-              style: TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              const Text('Mis Metas de Ahorro',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              FilledButton.icon(
+                onPressed: () => _openAddGoalModal(context),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('+ Nueva Meta'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (goals.isEmpty)
+            const Card(
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Crea tu primera meta de ahorro (ej. Fondo de Emergencia, Vacaciones, Vehículo) pulsando "+ Nueva Meta".',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ),
+            ),
           ...goals.map((g) {
-            final pct = (g.currentAmount / g.targetAmount).clamp(0.0, 1.0);
+            final pct =
+                g.targetAmount > 0 ? (g.currentAmount / g.targetAmount).clamp(0.0, 1.0) : 0.0;
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: Padding(
@@ -2944,7 +3789,21 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                         ),
                         Chip(
                           visualDensity: VisualDensity.compact,
-                          label: Text(g.deadline, style: const TextStyle(fontSize: 11)),
+                          label: Text(g.deadline,
+                              style: const TextStyle(fontSize: 11)),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline,
+                              size: 18, color: Colors.red),
+                          onPressed: () async {
+                            if (user == null) return;
+                            final updated =
+                                goals.where((i) => i.id != g.id).toList();
+                            ref.read(savingsGoalsProvider.notifier).state =
+                                updated;
+                            await CashStorageEngine.saveGoals(
+                                user.email, updated);
+                          },
                         ),
                       ],
                     ),
@@ -2960,15 +3819,21 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                         Text(
                             'Ahorrado: ${currency.format(g.currentAmount)} de ${currency.format(g.targetAmount)} (${(pct * 100).toInt()}%)'),
                         FilledButton.tonalIcon(
-                          onPressed: () {
-                            ref.read(savingsGoalsProvider.notifier).state = goals
+                          onPressed: () async {
+                            if (user == null) return;
+                            final updated = goals
                                 .map((item) => item.id == g.id
-                                    ? item.copyWith(currentAmount: item.currentAmount + 100)
+                                    ? item.copyWith(
+                                        currentAmount: item.currentAmount + 50)
                                     : item)
                                 .toList();
+                            ref.read(savingsGoalsProvider.notifier).state =
+                                updated;
+                            await CashStorageEngine.saveGoals(
+                                user.email, updated);
                           },
                           icon: const Icon(Icons.add, size: 16),
-                          label: const Text('Abonar +\$100'),
+                          label: const Text('Abonar +\$50'),
                         ),
                       ],
                     ),
@@ -2991,8 +3856,10 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Diagnóstico 50/30/20 & Exportación Contable',
-                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                  Text('Evaluación inteligente de tus finanzas y descarga para Excel',
+                      style:
+                          TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(
+                      'Calculado en tiempo real sobre tus ingresos y gastos registrados',
                       style: TextStyle(color: Colors.grey, fontSize: 13)),
                 ],
               ),
@@ -3002,8 +3869,8 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                   Clipboard.setData(ClipboardData(text: csv));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content:
-                            Text('✓ Sábana contable CSV copiada para Excel / Google Sheets.')),
+                        content: Text(
+                            '✓ Sábana contable CSV copiada para Excel / Google Sheets.')),
                   );
                 },
                 icon: const Icon(Icons.download, size: 18),
@@ -3018,14 +3885,18 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Regla 50% Necesidades / 30% Deseos / 20% Ahorro',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text(
+                      'Regla 50% Necesidades / 30% Deseos / 20% Ahorro',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 14),
                   _RuleBar(
                     title: 'Necesidades Básicas (Meta <= 50%)',
                     amount: currency.format(needsSpent),
                     target: currency.format(income * 0.50),
-                    ratio: income > 0 ? (needsSpent / (income * 0.50)).clamp(0.0, 1.0) : 0.0,
+                    ratio: income > 0
+                        ? (needsSpent / (income * 0.50)).clamp(0.0, 1.0)
+                        : 0.0,
                     color: Colors.teal,
                   ),
                   const SizedBox(height: 12),
@@ -3033,7 +3904,9 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
                     title: 'Estilo de Vida y Ocio (Meta <= 30%)',
                     amount: currency.format(wantsSpent),
                     target: currency.format(income * 0.30),
-                    ratio: income > 0 ? (wantsSpent / (income * 0.30)).clamp(0.0, 1.0) : 0.0,
+                    ratio: income > 0
+                        ? (wantsSpent / (income * 0.30)).clamp(0.0, 1.0)
+                        : 0.0,
                     color: Colors.amber.shade800,
                   ),
                   const SizedBox(height: 12),
@@ -3060,10 +3933,261 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
               title: const Text('Detector de "Gastos Hormiga" (Compras <= \$15)',
                   style: TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
-                  'Se detectaron ${microExpenses.length} micro-gastos este mes (${currency.format(microTotal)}). Fuga anual proyectada: ${currency.format(microTotal * 12)}.'),
+                  'Se detectaron ${microExpenses.length} micro-gastos (${currency.format(microTotal)}). Fuga anual proyectada: ${currency.format(microTotal * 12)}.'),
             ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _AddInstallmentForm extends ConsumerStatefulWidget {
+  const _AddInstallmentForm();
+  @override
+  ConsumerState<_AddInstallmentForm> createState() =>
+      _AddInstallmentFormState();
+}
+
+class _AddInstallmentFormState extends ConsumerState<_AddInstallmentForm> {
+  final _cardCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _totalCtrl = TextEditingController();
+  final _monthsCtrl = TextEditingController(text: '12');
+  final _cutOffCtrl = TextEditingController(text: '15');
+  final _dueDayCtrl = TextEditingController(text: '2');
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Registrar Nueva Compra Diferida',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _cardCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Tarjeta de Crédito (Ej. Visa Pichincha, Diners)',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _descCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Descripción de la Compra',
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _totalCtrl,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Monto Total (USD)',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _monthsCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Plazo (Meses)',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _cutOffCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Día de Corte (1-31)',
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _dueDayCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Día Máx. Pago (1-31)',
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () async {
+                  final total = double.tryParse(
+                          _totalCtrl.text.replaceAll(',', '.')) ??
+                      0.0;
+                  final months = int.tryParse(_monthsCtrl.text) ?? 12;
+                  if (_cardCtrl.text.trim().isEmpty ||
+                      _descCtrl.text.trim().isEmpty ||
+                      total <= 0 ||
+                      user == null) return;
+
+                  final updated = [
+                    ...ref.read(installmentsProvider),
+                    CreditInstallmentModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      cardName: _cardCtrl.text.trim(),
+                      description: _descCtrl.text.trim(),
+                      totalAmount: total,
+                      totalMonths: months,
+                      paidMonths: 0,
+                      cutOffDay:
+                          (int.tryParse(_cutOffCtrl.text) ?? 15).clamp(1, 31),
+                      paymentDueDay:
+                          (int.tryParse(_dueDayCtrl.text) ?? 2).clamp(1, 31),
+                    ),
+                  ];
+                  ref.read(installmentsProvider.notifier).state = updated;
+                  await CashStorageEngine.saveInstallments(user.email, updated);
+                  if (context.mounted) Navigator.pop(context);
+                },
+                child: const Text('Guardar Diferido'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AddGoalForm extends ConsumerStatefulWidget {
+  const _AddGoalForm();
+  @override
+  ConsumerState<_AddGoalForm> createState() => _AddGoalFormState();
+}
+
+class _AddGoalFormState extends ConsumerState<_AddGoalForm> {
+  final _titleCtrl = TextEditingController();
+  final _targetCtrl = TextEditingController();
+  final _initialCtrl = TextEditingController(text: '0');
+  final _deadlineCtrl = TextEditingController(text: 'Dic 2026');
+
+  @override
+  Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('Nueva Meta de Ahorro',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 14),
+        TextField(
+          controller: _titleCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Nombre de la Meta (Ej. Fondo de Emergencia, Viaje)',
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _targetCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Monto Objetivo (USD)',
+            prefixIcon: Icon(Icons.attach_money),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _initialCtrl,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Ahorro Inicial Actual (USD)',
+            prefixIcon: Icon(Icons.savings_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _deadlineCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Fecha Meta (Ej. Dic 2026)',
+            prefixIcon: Icon(Icons.event),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancelar'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 2,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14)),
+                onPressed: () async {
+                  final target = double.tryParse(
+                          _targetCtrl.text.replaceAll(',', '.')) ??
+                      0.0;
+                  final current = double.tryParse(
+                          _initialCtrl.text.replaceAll(',', '.')) ??
+                      0.0;
+                  if (_titleCtrl.text.trim().isEmpty ||
+                      target <= 0 ||
+                      user == null) return;
+
+                  final updated = [
+                    ...ref.read(savingsGoalsProvider),
+                    SavingsGoalModel(
+                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      title: _titleCtrl.text.trim(),
+                      targetAmount: target,
+                      currentAmount: current,
+                      deadline: _deadlineCtrl.text.trim(),
+                    ),
+                  ];
+                  ref.read(savingsGoalsProvider.notifier).state = updated;
+                  await CashStorageEngine.saveGoals(user.email, updated);
+                  if (context.mounted) Navigator.pop(context);
+                },
+                child: const Text('Guardar Meta'),
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -3093,7 +4217,9 @@ class _RuleBar extends StatelessWidget {
           alignment: WrapAlignment.spaceBetween,
           spacing: 8,
           children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text(title,
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             Text('$amount / $target', style: const TextStyle(fontSize: 12)),
           ],
         ),
@@ -3110,7 +4236,7 @@ class _RuleBar extends StatelessWidget {
 }
 
 // ============================================================================
-// PESTAÑA 4: INVITACIONES POR CORREO & 3 PLANES EN USD (MENSUAL Y ANUAL -33%)
+// PESTAÑA 4: FAMILIA, INVITACIONES CON ENLACE REAL Y 3 PLANES EN USD
 // ============================================================================
 class FamilyInvitationsAndPlansView extends ConsumerStatefulWidget {
   const FamilyInvitationsAndPlansView({super.key});
@@ -3125,13 +4251,17 @@ class _FamilyInvitationsAndPlansViewState
   final _inviteNameCtrl = TextEditingController();
   final _inviteEmailCtrl = TextEditingController();
 
-  void _sendEmailInvitation() {
+  Future<void> _sendEmailInvitation() async {
+    final user = ref.read(authSessionProvider);
+    if (user == null) return;
+
     final name = _inviteNameCtrl.text.trim();
-    final email = _inviteEmailCtrl.text.trim();
+    final email = _inviteEmailCtrl.text.trim().toLowerCase();
     if (name.isEmpty || email.isEmpty || !email.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Ingresa el nombre y un correo electrónico válido del familiar.')),
+            content: Text(
+                'Ingresa el nombre y un correo electrónico válido del familiar.')),
       );
       return;
     }
@@ -3149,33 +4279,47 @@ class _FamilyInvitationsAndPlansViewState
       return;
     }
 
-    ref.read(pendingInvitationsProvider.notifier).state = [
+    final token = DateTime.now().millisecondsSinceEpoch.toString();
+    final inviteUrl =
+        'https://crisricky7.github.io/Cash/?invite=$token&email=$email';
+    await Clipboard.setData(ClipboardData(text: inviteUrl));
+
+    final updatedInvites = [
       ...pendingInvites,
       EmailInvitation(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        id: token,
         invitedName: name,
         invitedEmail: email,
+        token: token,
       ),
     ];
+    ref.read(pendingInvitationsProvider.notifier).state = updatedInvites;
+    await CashStorageEngine.saveInvitations(user.email, updatedInvites);
 
     _inviteNameCtrl.clear();
     _inviteEmailCtrl.clear();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            '✉️ Correo de invitación enviado a $email. Cuando lo acepte, se sumará a tu familia automáticamente.'),
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '✉️ Invitación creada para $email y enlace copiado al portapapeles.'),
+        ),
+      );
+    }
   }
 
-  void _acceptEmailInvitation(EmailInvitation inv) {
+  Future<void> _confirmInvitationAccepted(EmailInvitation inv) async {
+    final user = ref.read(authSessionProvider);
+    if (user == null) return;
+
     final members = ref.read(householdMembersProvider);
     final pending = ref.read(pendingInvitationsProvider);
 
-    ref.read(pendingInvitationsProvider.notifier).state =
-        pending.where((i) => i.id != inv.id).toList();
+    final updatedPending = pending.where((i) => i.id != inv.id).toList();
+    ref.read(pendingInvitationsProvider.notifier).state = updatedPending;
+    await CashStorageEngine.saveInvitations(user.email, updatedPending);
 
-    ref.read(householdMembersProvider.notifier).state = [
+    final updatedMembers = [
       ...members,
       HouseholdMember(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -3183,24 +4327,30 @@ class _FamilyInvitationsAndPlansViewState
         email: inv.invitedEmail,
       ),
     ];
+    ref.read(householdMembersProvider.notifier).state = updatedMembers;
+    await CashStorageEngine.saveMembers(user.email, updatedMembers);
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-            '🎉 ${inv.invitedName} aceptó el correo. ¡Se agregó a tu familia y el Modo Familiar se activó automáticamente!'),
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '🎉 ${inv.invitedName} se unió a la familia. ¡Modo Familiar activado y guardado!'),
+        ),
+      );
+    }
   }
 
   void _openCheckoutForTier(SubscriptionTier targetTier, bool isAnnual) {
     showAdaptiveSheetOrDialog(
       context: context,
-      child: _TierCheckoutSheet(targetTier: targetTier, initialIsAnnual: isAnnual),
+      child:
+          _TierCheckoutSheet(targetTier: targetTier, initialIsAnnual: isAnnual),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
     final members = ref.watch(householdMembersProvider);
     final pendingInvites = ref.watch(pendingInvitationsProvider);
     final currentTier = ref.watch(subscriptionTierProvider);
@@ -3219,7 +4369,8 @@ class _FamilyInvitationsAndPlansViewState
         Card(
           elevation: 0,
           color: Theme.of(context).colorScheme.primaryContainer,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Column(
@@ -3235,9 +4386,10 @@ class _FamilyInvitationsAndPlansViewState
                     Expanded(
                       child: Text(
                         isFamily
-                            ? 'Modo Familiar Activo Automáticamente (${members.length} personas)'
-                            : 'Modo Personal Activo Automáticamente (1 sola persona)',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ? 'Modo Familiar Activo (${members.length} personas compartiendo)'
+                            : 'Modo Personal Activo (1 sola persona registrada)',
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ],
@@ -3245,8 +4397,8 @@ class _FamilyInvitationsAndPlansViewState
                 const SizedBox(height: 6),
                 Text(
                   isFamily
-                      ? 'Como tienes más de 1 integrante compartiendo ingresos y gastos, la app usa la paleta Verde Salvia Familiar y habilita el reparto equitativo del hogar.'
-                      : 'Como solo hay 1 persona registrada, la app opera en Modo Personal (Azul Océano). Invita a un familiar por correo y cuando acepte pasará a Modo Familiar automáticamente.',
+                      ? 'Tienes más de 1 integrante activo en tu cuenta: el Modo Familiar (Verde Salvia) y el reparto equitativo están habilitados.'
+                      : 'Solo estás tú en la cuenta: operas en Modo Personal (Azul Océano). Cuando invites a un familiar y se una, pasará a Modo Familiar automáticamente.',
                   style: const TextStyle(fontSize: 12),
                 ),
               ],
@@ -3266,29 +4418,24 @@ class _FamilyInvitationsAndPlansViewState
                   children: [
                     const Expanded(
                       child: Text('Invitar Integrante a la Familia por Correo',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold)),
                     ),
                     Chip(
                       visualDensity: VisualDensity.compact,
                       label: Text(
                         'Cupos: ${members.length}/${currentTier.maxUsers}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 12),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  currentTier == SubscriptionTier.personal
-                      ? 'Tu Plan Personal incluye 1 usuario. Para enviar invitaciones por correo, elige abajo el Plan Familiar (4 usuarios) o Familiar Plus (7 usuarios).'
-                      : 'Envía una invitación por correo. Si el destinatario la acepta, se agrega a tu familia automáticamente.',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _inviteNameCtrl,
                   decoration: const InputDecoration(
-                    labelText: 'Nombre del Familiar (Ej. Esposa, Hijo, Hermano)',
+                    labelText: 'Nombre del Familiar',
                     prefixIcon: Icon(Icons.badge_outlined),
                     isDense: true,
                   ),
@@ -3298,8 +4445,7 @@ class _FamilyInvitationsAndPlansViewState
                   controller: _inviteEmailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   decoration: const InputDecoration(
-                    labelText: 'Correo Electrónico para enviar la invitación',
-                    hintText: 'familiar@correo.com',
+                    labelText: 'Correo Electrónico del Familiar',
                     prefixIcon: Icon(Icons.mail_outline),
                     isDense: true,
                   ),
@@ -3310,7 +4456,7 @@ class _FamilyInvitationsAndPlansViewState
                   icon: const Icon(Icons.send_outlined, size: 18),
                   label: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('Enviar Invitación por Correo Electrónico'),
+                    child: Text('Enviar Invitación por Correo'),
                   ),
                 ),
               ],
@@ -3320,7 +4466,7 @@ class _FamilyInvitationsAndPlansViewState
 
         if (pendingInvites.isNotEmpty) ...[
           const SizedBox(height: 16),
-          const Text('Invitaciones Enviadas por Correo (Pendientes de Aceptar)',
+          const Text('Invitaciones Pendientes de Aceptación',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           ...pendingInvites.map((inv) => Card(
@@ -3338,15 +4484,17 @@ class _FamilyInvitationsAndPlansViewState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('✉️ ${inv.invitedName} (${inv.invitedEmail})',
-                              style: const TextStyle(fontWeight: FontWeight.bold)),
-                          const Text('Esperando a que haga clic en "Aceptar" en su correo...',
-                              style: TextStyle(fontSize: 12, color: Colors.grey)),
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Enlace de invitación enviado',
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                       FilledButton.tonalIcon(
-                        onPressed: () => _acceptEmailInvitation(inv),
-                        icon: const Icon(Icons.mark_email_read_outlined, size: 18),
-                        label: const Text('Simular que acepta el correo'),
+                        onPressed: () => _confirmInvitationAccepted(inv),
+                        icon: const Icon(Icons.check_circle_outline, size: 18),
+                        label: const Text('Confirmar Aceptación'),
                       ),
                     ],
                   ),
@@ -3366,24 +4514,30 @@ class _FamilyInvitationsAndPlansViewState
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
               leading: CircleAvatar(child: Text(m.name[0])),
-              title: Text(m.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(m.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
               subtitle: Text(
                   '${m.email} • Gastos registrados: ${currency.format(memberSpent)}'),
               trailing: m.isOwner
                   ? const Chip(label: Text('Titular'))
                   : IconButton(
-                      tooltip: 'Quitar de la familia',
-                      icon: const Icon(Icons.person_remove_outlined, color: Colors.red),
-                      onPressed: () {
-                        ref.read(householdMembersProvider.notifier).state =
+                      icon: const Icon(Icons.person_remove_outlined,
+                          color: Colors.red),
+                      onPressed: () async {
+                        if (user == null) return;
+                        final updated =
                             members.where((item) => item.id != m.id).toList();
+                        ref.read(householdMembersProvider.notifier).state =
+                            updated;
+                        await CashStorageEngine.saveMembers(
+                            user.email, updated);
                       },
                     ),
             ),
           );
         }),
 
-        if (isFamily) ...[
+        if (isFamily && members.isNotEmpty) ...[
           const SizedBox(height: 8),
           Card(
             child: ListTile(
@@ -3397,11 +4551,11 @@ class _FamilyInvitationsAndPlansViewState
         ],
         const SizedBox(height: 28),
 
-        // PLANES DE SUSCRIPCIÓN EN USD CON MENSUAL Y ANUAL (-33%)
         const Text('Planes de Suscripción (Precios en USD)',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         Text('Suscripción activa: $activeBillingText',
-            style: const TextStyle(fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold)),
+            style: const TextStyle(
+                fontSize: 12, color: Colors.teal, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
 
         SegmentedButton<bool>(
@@ -3418,8 +4572,9 @@ class _FamilyInvitationsAndPlansViewState
             ),
           ],
           selected: {isAnnualSelected},
-          onSelectionChanged: (s) =>
-              ref.read(isAnnualBillingSelectedProvider.notifier).state = s.first,
+          onSelectionChanged: (s) => ref
+              .read(isAnnualBillingSelectedProvider.notifier)
+              .state = s.first,
         ),
         const SizedBox(height: 14),
 
@@ -3461,12 +4616,15 @@ class _FamilyInvitationsAndPlansViewState
                             children: [
                               Text(tier.title,
                                   style: const TextStyle(
-                                      fontSize: 18, fontWeight: FontWeight.bold)),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold)),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.primaryContainer,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primaryContainer,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
@@ -3474,7 +4632,8 @@ class _FamilyInvitationsAndPlansViewState
                                       ? '1 Usuario'
                                       : 'Hasta ${tier.maxUsers} Usuarios',
                                   style: const TextStyle(
-                                      fontSize: 11, fontWeight: FontWeight.bold),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
                               if (isAnnualSelected)
@@ -3498,7 +4657,8 @@ class _FamilyInvitationsAndPlansViewState
                           ),
                           const SizedBox(height: 4),
                           Text(tier.subtitle,
-                              style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                       Column(
@@ -3521,7 +4681,8 @@ class _FamilyInvitationsAndPlansViewState
                           else
                             Text(
                               'O \$${tier.annualPrice.toStringAsFixed(2)} USD al año (33% dto.)',
-                              style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              style: const TextStyle(
+                                  fontSize: 11, color: Colors.grey),
                             ),
                         ],
                       ),
@@ -3543,10 +4704,8 @@ class _FamilyInvitationsAndPlansViewState
                           size: 18),
                       label: Text(
                         isCurrent
-                            ? (isAnnualSelected
-                                ? 'Cambiar mi ${tier.title} a Ciclo Anual (\$${tier.annualPrice.toStringAsFixed(2)} USD)'
-                                : 'Plan Activo Actualmente')
-                            : 'Elegir ${tier.title} (${isAnnualSelected ? "\$${tier.annualPrice.toStringAsFixed(2)} USD/año" : "\$${tier.monthlyPrice.toStringAsFixed(2)} USD/mes"})',
+                            ? 'Plan Activo (${tier.title})'
+                            : 'Activar ${tier.title} (${isAnnualSelected ? "\$${tier.annualPrice.toStringAsFixed(2)} USD/año" : "\$${tier.monthlyPrice.toStringAsFixed(2)} USD/mes"})',
                       ),
                     ),
                   ),
@@ -3646,6 +4805,7 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
     final tier = widget.targetTier;
     final amountUsd = _isAnnual ? tier.annualPrice : tier.monthlyPrice;
     final sku =
@@ -3663,11 +4823,13 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
           segments: [
             ButtonSegment<bool>(
               value: false,
-              label: Text('Mensual (\$${tier.monthlyPrice.toStringAsFixed(2)} USD)'),
+              label:
+                  Text('Mensual (\$${tier.monthlyPrice.toStringAsFixed(2)} USD)'),
             ),
             ButtonSegment<bool>(
               value: true,
-              label: Text('Anual (\$${tier.annualPrice.toStringAsFixed(2)} USD • -33%)'),
+              label: Text(
+                  'Anual (\$${tier.annualPrice.toStringAsFixed(2)} USD • -33%)'),
             ),
           ],
           selected: {_isAnnual},
@@ -3716,8 +4878,8 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
           ),
           child: Text(
             _channel == 'PAYPHONE_WEB'
-                ? '• Pasarela: Payphone Cajita de Pagos V2\n• Total a pagar: \$${amountUsd.toStringAsFixed(2)} USD (Impuestos incluidos)\n• Confirmación inmediata en POST /api/button/V2/Confirm'
-                : '• Pasarela: RevenueCat (Google Play / App Store)\n• Producto: $sku\n• Total a pagar: \$${amountUsd.toStringAsFixed(2)} USD (${_isAnnual ? "Facturación Anual" : "Facturación Mensual"})',
+                ? '• Pasarela: Payphone Cajita de Pagos V2\n• Total a pagar: \$${amountUsd.toStringAsFixed(2)} USD (Impuestos incluidos)\n• Confirmación en POST /api/button/V2/Confirm'
+                : '• Pasarela: RevenueCat (Google Play / App Store)\n• Producto: $sku\n• Total a pagar: \$${amountUsd.toStringAsFixed(2)} USD',
             style: const TextStyle(fontSize: 12, height: 1.45),
           ),
         ),
@@ -3739,21 +4901,21 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14)),
-                onPressed: () {
-                  ref.read(subscriptionTierProvider.notifier).state = tier;
-                  ref.read(isAnnualBillingSelectedProvider.notifier).state = _isAnnual;
-                  ref.read(activeBillingCycleTextProvider.notifier).state =
+                onPressed: () async {
+                  if (user == null) return;
+                  final label =
                       '${tier.title} (${_isAnnual ? "\$${tier.annualPrice.toStringAsFixed(2)} USD/año" : "\$${tier.monthlyPrice.toStringAsFixed(2)} USD/mes"}) vía ${_channel == "PAYPHONE_WEB" ? "Payphone" : "RevenueCat"}';
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                          '✓ ${tier.title} (${_isAnnual ? "Anual" : "Mensual"}) activado por \$${amountUsd.toStringAsFixed(2)} USD.'),
-                    ),
-                  );
+                  ref.read(subscriptionTierProvider.notifier).state = tier;
+                  ref.read(isAnnualBillingSelectedProvider.notifier).state =
+                      _isAnnual;
+                  ref.read(activeBillingCycleTextProvider.notifier).state =
+                      label;
+                  await CashStorageEngine.saveTier(
+                      user.email, tier, _isAnnual, label);
+                  if (context.mounted) Navigator.pop(context);
                 },
                 icon: const Icon(Icons.check_circle_outline, size: 18),
-                label: Text('Pagar \$${amountUsd.toStringAsFixed(2)} USD'),
+                label: Text('Activar por \$${amountUsd.toStringAsFixed(2)} USD'),
               ),
             ),
           ],
@@ -3764,7 +4926,7 @@ class _TierCheckoutSheetState extends ConsumerState<_TierCheckoutSheet> {
 }
 
 // ============================================================================
-// MODAL MANUAL (GASTO | INGRESO | RECARGAR BILLETERA / TRANSFERIR)
+// MODAL MANUAL (GASTO | INGRESO | RECARGAR BILLETERA / TRANSFERIR CON PERSISTENCIA)
 // ============================================================================
 class ManualTxFormModal extends ConsumerStatefulWidget {
   final int initialType;
@@ -3780,6 +4942,7 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
   String? _selectedCategory;
   String? _selectedAccount;
   String? _destinationAccount;
+  String? _selectedMember;
 
   @override
   void initState() {
@@ -3789,26 +4952,36 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(authSessionProvider);
     final members = ref.watch(householdMembersProvider);
     final accounts = ref.watch(accountsProvider);
     final allCategories = ref.watch(categoriesProvider);
     final filteredCategories =
         allCategories.where((c) => c.type == (_type == 1 ? 1 : 2)).toList();
 
-    if (_selectedAccount == null || !accounts.any((a) => a.name == _selectedAccount)) {
-      _selectedAccount = accounts.first.name;
+    if (_selectedAccount == null ||
+        !accounts.any((a) => a.name == _selectedAccount)) {
+      _selectedAccount = accounts.isNotEmpty ? accounts.first.name : null;
     }
     if (_destinationAccount == null ||
         !accounts.any((a) => a.name == _destinationAccount) ||
         _destinationAccount == _selectedAccount) {
-      final wallet = accounts.where((a) => a.type == 'Billetera Digital').firstOrNull;
-      _destinationAccount = (wallet != null && wallet.name != _selectedAccount)
-          ? wallet.name
-          : (accounts.length > 1 ? accounts[1].name : accounts.first.name);
+      final wallet =
+          accounts.where((a) => a.type == 'Billetera Digital').firstOrNull;
+      _destinationAccount =
+          (wallet != null && wallet.name != _selectedAccount)
+              ? wallet.name
+              : (accounts.length > 1 ? accounts[1].name : _selectedAccount);
     }
     if (_selectedCategory == null ||
         !filteredCategories.any((c) => c.name == _selectedCategory)) {
-      _selectedCategory = filteredCategories.first.name;
+      _selectedCategory =
+          filteredCategories.isNotEmpty ? filteredCategories.first.name : null;
+    }
+    if (_selectedMember == null ||
+        !members.any((m) => m.name == _selectedMember)) {
+      _selectedMember =
+          members.isNotEmpty ? members.first.name : (user?.fullName ?? 'Titular');
     }
 
     return Column(
@@ -3816,7 +4989,9 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          _type == 3 ? 'Recargar Billetera / Transferir' : 'Registro Detallado',
+          _type == 3
+              ? 'Recargar Billetera / Transferir'
+              : 'Registrar Movimiento Real',
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 14),
@@ -3844,35 +5019,40 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
           decoration: const InputDecoration(labelText: 'Descripción'),
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<String>(
-          value: _selectedAccount,
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText: _type == 3 ? 'Cuenta Origen' : 'Cuenta o Billetera',
-          ),
-          items: accounts
-              .map((a) => DropdownMenuItem(
-                    value: a.name,
-                    child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
-                  ))
-              .toList(),
-          onChanged: (v) => setState(() => _selectedAccount = v),
-        ),
-        const SizedBox(height: 12),
-        if (_type == 3)
+        if (accounts.isNotEmpty)
           DropdownButtonFormField<String>(
-            value: _destinationAccount,
+            value: _selectedAccount,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Cuenta o Billetera Destino'),
+            decoration: InputDecoration(
+              labelText:
+                  _type == 3 ? 'Cuenta Origen' : 'Cuenta o Billetera Digital',
+            ),
             items: accounts
                 .map((a) => DropdownMenuItem(
                       value: a.name,
-                      child: Text('${a.name} (${a.type})', overflow: TextOverflow.ellipsis),
+                      child: Text('${a.name} (\$${a.balance.toStringAsFixed(2)})',
+                          overflow: TextOverflow.ellipsis),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedAccount = v),
+          ),
+        const SizedBox(height: 12),
+        if (_type == 3 && accounts.isNotEmpty)
+          DropdownButtonFormField<String>(
+            value: _destinationAccount,
+            isExpanded: true,
+            decoration:
+                const InputDecoration(labelText: 'Cuenta o Billetera Destino'),
+            items: accounts
+                .map((a) => DropdownMenuItem(
+                      value: a.name,
+                      child: Text('${a.name} (\$${a.balance.toStringAsFixed(2)})',
+                          overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
             onChanged: (v) => setState(() => _destinationAccount = v),
           )
-        else
+        else if (filteredCategories.isNotEmpty)
           DropdownButtonFormField<String>(
             value: _selectedCategory,
             isExpanded: true,
@@ -3885,6 +5065,19 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
                 .toList(),
             onChanged: (v) => setState(() => _selectedCategory = v),
           ),
+        if (members.length > 1) ...[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _selectedMember,
+            isExpanded: true,
+            decoration:
+                const InputDecoration(labelText: 'Registrado por Integrante'),
+            items: members
+                .map((m) => DropdownMenuItem(value: m.name, child: Text(m.name)))
+                .toList(),
+            onChanged: (v) => setState(() => _selectedMember = v),
+          ),
+        ],
         const SizedBox(height: 22),
         Row(
           children: [
@@ -3902,29 +5095,37 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
               child: FilledButton(
                 style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14)),
-                onPressed: () {
-                  final amt = double.tryParse(_amountCtrl.text) ?? 0;
-                  if (amt <= 0 || _selectedAccount == null) return;
+                onPressed: () async {
+                  final amt = double.tryParse(
+                          _amountCtrl.text.replaceAll(',', '.')) ??
+                      0;
+                  if (amt <= 0 || _selectedAccount == null || user == null) {
+                    return;
+                  }
 
                   final list = ref.read(transactionsListProvider);
+                  List<TxItem> updatedTx;
+                  List<AccountModel> updatedAcc;
+
                   if (_type == 3) {
                     if (_destinationAccount == null ||
                         _destinationAccount == _selectedAccount) return;
-                    ref.read(transactionsListProvider.notifier).state = [
+                    updatedTx = [
                       TxItem(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        description: _descCtrl.text.isEmpty
-                            ? 'Recarga / Transferencia'
-                            : _descCtrl.text,
+                        description: _descCtrl.text.trim().isEmpty
+                            ? 'Transferencia / Recarga'
+                            : _descCtrl.text.trim(),
                         amount: amt,
                         type: 3,
                         categoryName: 'Transferencia',
-                        accountName: '$_selectedAccount → $_destinationAccount',
-                        memberName: members.first.name,
+                        accountName: _selectedAccount!,
+                        destinationAccountName: _destinationAccount!,
+                        memberName: _selectedMember ?? user.fullName,
                       ),
                       ...list,
                     ];
-                    ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                    updatedAcc = accounts.map((acc) {
                       if (acc.name == _selectedAccount) {
                         return acc.copyWith(balance: acc.balance - amt);
                       }
@@ -3934,20 +5135,21 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
                       return acc;
                     }).toList();
                   } else {
-                    ref.read(transactionsListProvider.notifier).state = [
+                    updatedTx = [
                       TxItem(
                         id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        description:
-                            _descCtrl.text.isEmpty ? 'Movimiento' : _descCtrl.text,
+                        description: _descCtrl.text.trim().isEmpty
+                            ? (_selectedCategory ?? 'Movimiento')
+                            : _descCtrl.text.trim(),
                         amount: amt,
                         type: _type,
-                        categoryName: _selectedCategory!,
+                        categoryName: _selectedCategory ?? 'General',
                         accountName: _selectedAccount!,
-                        memberName: members.first.name,
+                        memberName: _selectedMember ?? user.fullName,
                       ),
                       ...list,
                     ];
-                    ref.read(accountsProvider.notifier).state = accounts.map((acc) {
+                    updatedAcc = accounts.map((acc) {
                       if (acc.name == _selectedAccount) {
                         final delta = _type == 1 ? amt : -amt;
                         return acc.copyWith(balance: acc.balance + delta);
@@ -3955,7 +5157,14 @@ class _ManualTxFormModalState extends ConsumerState<ManualTxFormModal> {
                       return acc;
                     }).toList();
                   }
-                  Navigator.pop(context);
+
+                  ref.read(transactionsListProvider.notifier).state = updatedTx;
+                  ref.read(accountsProvider.notifier).state = updatedAcc;
+                  await CashStorageEngine.saveTransactions(
+                      user.email, updatedTx);
+                  await CashStorageEngine.saveAccounts(user.email, updatedAcc);
+
+                  if (context.mounted) Navigator.pop(context);
                 },
                 child: const Text('Guardar'),
               ),

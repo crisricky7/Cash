@@ -1,7 +1,7 @@
 name: cash_app
-description: Cash - Control de gastos personal y familiar con todas las herramientas Pro.
+description: Cash - Control de gastos personal y familiar en produccion.
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+1
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -12,6 +12,7 @@ dependencies:
   flutter_riverpod: ^2.5.1
   dio: ^5.4.3+1
   intl: ^0.19.0
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:
