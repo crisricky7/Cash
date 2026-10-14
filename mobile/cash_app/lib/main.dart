@@ -2504,7 +2504,7 @@ class _FamilyInvitationsAndPlansViewState
                       onPressed: () =>
                           _openCheckoutForTier(tier, isAnnualSelected),
                       icon: Icon(
-                          isCurrent ? Icons.Autorenew : Icons.payment,
+                          isCurrent ? Icons.autorenew : Icons.payment,
                           size: 18),
                       label: Text(
                         isCurrent
