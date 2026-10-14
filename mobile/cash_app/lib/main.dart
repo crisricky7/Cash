@@ -1822,7 +1822,7 @@ class Copiloto503020AndExportView extends ConsumerWidget {
 
     final adminPaid = expenses
         .where((e) => e.memberName == 'Admin Hogar')
-        .fold(0.0, (s, e) => s + t.amount);
+        .fold(0.0, (s, e) => s + e.amount);
     final partnerPaid =
         expenses.where((e) => e.memberName == 'Pareja').fold(0.0, (s, e) => s + e.amount);
     final fairShare = (adminPaid + partnerPaid) / 2.0;
