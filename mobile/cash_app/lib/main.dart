@@ -735,6 +735,31 @@ class CashStorageEngine {
 }
 
 // ============================================================================
+// EXPORTACIÓN CSV (RFC 4180)
+// ============================================================================
+String escapeCsvField(String value) {
+  final needsQuotes = value.contains(',') ||
+      value.contains('"') ||
+      value.contains('\n') ||
+      value.contains('\r');
+  return needsQuotes ? '"${value.replaceAll('"', '""')}"' : value;
+}
+
+String generateTransactionsCsv(List<TxItem> items) {
+  final buffer = StringBuffer();
+  buffer.writeln(
+      'Fecha,Tipo,Categoria,Descripcion,Cuenta_Billetera,Miembro,Monto_USD');
+  for (final t in items) {
+    final tipo =
+        t.type == 1 ? 'INGRESO' : (t.type == 3 ? 'TRANSFERENCIA' : 'GASTO');
+    final fecha = DateFormat('yyyy-MM-dd').format(t.date);
+    buffer.writeln(
+        '$fecha,$tipo,${escapeCsvField(t.categoryName)},${escapeCsvField(t.description)},${escapeCsvField(t.accountName)},${escapeCsvField(t.memberName)},${t.amount.toStringAsFixed(2)}');
+  }
+  return buffer.toString();
+}
+
+// ============================================================================
 // MOTOR INTELIGENTE DE LENGUAJE NATURAL (REGISTRO EN 3 SEGUNDOS)
 // ============================================================================
 class SmartInputParser {
@@ -3534,20 +3559,6 @@ class _AddCategoryFormState extends ConsumerState<_AddCategoryForm> {
 class CopilotCardsAndGoalsView extends ConsumerWidget {
   const CopilotCardsAndGoalsView({super.key});
 
-  String _generateCsv(List<TxItem> items) {
-    final buffer = StringBuffer();
-    buffer.writeln(
-        'Fecha,Tipo,Categoria,Descripcion,Cuenta_Billetera,Miembro,Monto_USD');
-    for (final t in items) {
-      final tipo =
-          t.type == 1 ? 'INGRESO' : (t.type == 3 ? 'TRANSFERENCIA' : 'GASTO');
-      final fecha = DateFormat('yyyy-MM-dd').format(t.date);
-      buffer.writeln(
-          '$fecha,$tipo,${t.categoryName},${t.description},${t.accountName},${t.memberName},${t.amount.toStringAsFixed(2)}');
-    }
-    return buffer.toString();
-  }
-
   void _openAddInstallmentModal(BuildContext context) {
     showAdaptiveSheetOrDialog(
       context: context,
@@ -3865,7 +3876,7 @@ class CopilotCardsAndGoalsView extends ConsumerWidget {
               ),
               FilledButton.icon(
                 onPressed: () {
-                  final csv = _generateCsv(allTx);
+                  final csv = generateTransactionsCsv(allTx);
                   Clipboard.setData(ClipboardData(text: csv));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
