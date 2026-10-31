@@ -1,7 +1,7 @@
 # Spec: account transfers and CSV escaping
 
 Issue: [#6](https://github.com/crisricky7/Cash/issues/6)
-Status: Accepted
+Status: Implemented
 
 ## Problem
 
@@ -49,9 +49,9 @@ Status: Accepted
 
 ## Tasks
 
-- [ ] Write failing API tests for T1 to T7 and C1 to C4
-- [ ] Fix transfers and the dashboard
-- [ ] Fix the API CSV export
-- [ ] Write failing app tests for C1 to C3
-- [ ] Fix the app CSV export
-- [ ] Update the README limitations and the changelog
+- [x] Write failing API tests for T1 to T7 and C1 to C4
+- [x] Fix transfers and the dashboard
+- [x] Fix the API CSV export
+- [x] Write failing app tests for C1 to C3
+- [x] Fix the app CSV export
+- [x] Update the README limitations and the changelog
