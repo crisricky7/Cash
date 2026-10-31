@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="640" viewBox="0 0 360 640" role="img" aria-label="Today screenshot placeholder">
+  <rect width="360" height="640" rx="16" fill="#eef1f4" stroke="#b8c0c8" stroke-width="2"/>
+  <text x="180" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="700" fill="#3d4852">Today</text>
+  <text x="180" y="340" text-anchor="middle" font-family="Arial, sans-serif" font-size="15" fill="#5f6c7b">Screenshot pending</text>
+</svg>
