@@ -1769,7 +1769,7 @@ class _RealAuthScreenState extends ConsumerState<RealAuthScreen> {
                               textCapitalization: TextCapitalization.words,
                               decoration: const InputDecoration(
                                 labelText: 'Tu Nombre Completo',
-                                hintText: 'Ej. Cristhian Muñoz',
+                                hintText: 'Ej. Alex Ejemplo',
                                 prefixIcon: Icon(Icons.person_outline),
                               ),
                             ),

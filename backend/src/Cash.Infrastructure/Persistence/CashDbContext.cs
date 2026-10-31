@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Cash.Domain.Entities;
 using Cash.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -26,12 +24,6 @@ public class CashDbContext(DbContextOptions<CashDbContext> options) : DbContext(
             e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId);
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).IsRequired(false);
         });
-
-        var passHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("Password123!")));
-        modelBuilder.Entity<User>().HasData(
-            new User { Id = Guid.Parse("91111111-1111-1111-1111-111111111111"), FullName = "Cristhian (SuperAdmin App)", Email = "admin@cashapp.com", PasswordHash = passHash, Role = "SuperAdmin", CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
-            new User { Id = Guid.Parse("92222222-2222-2222-2222-222222222222"), FullName = "Titular de Cuenta", Email = "usuario@cash.com", PasswordHash = passHash, Role = "Usuario", CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
-        );
 
         modelBuilder.Entity<Account>().HasData(
             new Account { Id = Guid.Parse("11111111-1111-1111-1111-111111111111"), Name = "Cuenta Bancaria Principal", AccountType = "Banco", Balance = 1850.00m, Currency = "USD", CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },

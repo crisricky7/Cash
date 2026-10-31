@@ -8,6 +8,6 @@ public class StoryTip
     public string Body { get; set; } = string.Empty;
     public string ActionTip { get; set; } = string.Empty;
     public string ThemeKey { get; set; } = "salvia";
-    public string CreatedByDeveloperEmail { get; set; } = "admin@cashapp.com";
+    public string CreatedByDeveloperEmail { get; set; } = "admin@example.com";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
