@@ -41,7 +41,6 @@ public static class CatalogsEndpoints
             await uow.Transactions.AddAsync(new Transaction
             {
                 AccountId = source.Id,
-                CategoryId = Guid.Empty,
                 Amount = req.Amount,
                 Type = TransactionType.Transfer,
                 Description = $"Transferencia: {source.Name} → {dest.Name}",

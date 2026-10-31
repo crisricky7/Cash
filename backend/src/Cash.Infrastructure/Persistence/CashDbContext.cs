@@ -21,7 +21,7 @@ public class CashDbContext(DbContextOptions<CashDbContext> options) : DbContext(
             e.HasKey(x => x.Id);
             e.Property(x => x.Amount).HasColumnType("numeric(18,2)");
             e.HasOne(x => x.Account).WithMany().HasForeignKey(x => x.AccountId);
-            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId);
+            e.HasOne(x => x.Category).WithMany().HasForeignKey(x => x.CategoryId).IsRequired(false);
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).IsRequired(false);
         });
 
