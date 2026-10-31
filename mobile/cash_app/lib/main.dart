@@ -2000,7 +2000,7 @@ class CompleteHomeShell extends ConsumerWidget {
             ),
             actions: [
               IconButton(
-                tooltip: 'Lector Real de Facturas XML (SRI) / OCR',
+                tooltip: 'Lector de Facturas XML (SRI)',
                 icon: const Icon(Icons.document_scanner_outlined),
                 onPressed: () => _openInvoiceScanner(context),
               ),
