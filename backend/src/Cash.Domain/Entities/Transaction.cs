@@ -7,7 +7,7 @@ public class Transaction
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid AccountId { get; set; }
     public Account? Account { get; set; }
-    public Guid CategoryId { get; set; }
+    public Guid? CategoryId { get; set; }
     public Category? Category { get; set; }
     public Guid? UserId { get; set; }
     public User? User { get; set; }

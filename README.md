@@ -44,7 +44,7 @@ These features work on the device, using local storage:
 | Auth | `POST /api/auth/register`, `POST /api/auth/login` | Create users and issue JWTs |
 | Dashboard | `GET /api/dashboard` | Balance, monthly totals, spending by member, budgets, recent transactions |
 | Transactions | `POST /api/transactions` | Record a transaction and update the account balance |
-| Catalogs | `GET /api/catalogs`, `POST` and `DELETE` under `/api/catalogs/accounts` and `/api/catalogs/categories` | Manage accounts and categories |
+| Catalogs | `GET /api/catalogs`, `POST` and `DELETE` under `/api/catalogs/accounts` and `/api/catalogs/categories`, `POST /api/catalogs/accounts/transfer` | Manage accounts and categories, and transfer between accounts |
 | Reports | `GET /api/reports/export-csv` | Export recent transactions |
 | Invoices | `POST /api/smart/parse-invoice` | Split out 15% VAT and suggest a category from keywords |
 
@@ -59,9 +59,8 @@ These features work on the device, using local storage:
 | Invitations | The app copies a link to the clipboard. No email is sent, and the link is not handled yet. The API keeps invitations and stories in memory. |
 | Authentication | Passwords are unsalted SHA-256 in the API and plain text on the device, and the role can be chosen at registration ([#4](https://github.com/crisricky7/Cash/issues/4)). |
 | API data | Not scoped by user: every authenticated user sees the same accounts ([#5](https://github.com/crisricky7/Cash/issues/5)). |
-| Known bugs | Account transfers return 500 in the API, and CSV fields are not escaped ([#6](https://github.com/crisricky7/Cash/issues/6)). |
 | Unpersisted entities | Installments, goals, recurring bills, subscriptions, invitations and stories have domain entities but no database tables in the API. |
-| Tests | None yet ([#2](https://github.com/crisricky7/Cash/issues/2), [#3](https://github.com/crisricky7/Cash/issues/3)). |
+| Tests | Only account transfers and CSV export are covered, and CI does not run the tests yet ([#2](https://github.com/crisricky7/Cash/issues/2), [#3](https://github.com/crisricky7/Cash/issues/3)). |
 
 ## Screenshots
 
@@ -173,6 +172,13 @@ flutter run -d chrome
 
 The app does not need the backend.
 
+### Tests
+
+```bash
+dotnet test backend/tests/Cash.Api.Tests   # Needs Docker: starts a temporary PostgreSQL
+cd mobile/cash_app && flutter test
+```
+
 ## Project structure
 
 ```text
@@ -184,9 +190,13 @@ Cash/
 │   ├── Cash.Application/      # MediatR commands and queries, DTOs
 │   ├── Cash.Domain/           # Entities, enums, repository interfaces
 │   └── Cash.Infrastructure/   # EF Core, repositories, JWT, Payphone
+├── backend/tests/
+│   └── Cash.Api.Tests/        # API tests against a temporary PostgreSQL
 ├── docs/screenshots/          # README screenshots
+├── specs/                     # Feature and bug specifications
 ├── mobile/cash_app/
 │   ├── lib/main.dart          # The whole Flutter app
+│   ├── test/                  # Flutter tests
 │   └── pubspec.yaml
 ├── .env.example               # Environment variable template
 ├── docker-compose.yml         # Local PostgreSQL
@@ -205,7 +215,7 @@ All of these items are planned.
 - [ ] [#3](https://github.com/crisricky7/Cash/issues/3) Add Flutter tests for `SmartInputParser` and `CashStorageEngine`
 - [ ] [#4](https://github.com/crisricky7/Cash/issues/4) Harden authentication in the API and the app
 - [ ] [#5](https://github.com/crisricky7/Cash/issues/5) Scope API data per user or household
-- [ ] [#6](https://github.com/crisricky7/Cash/issues/6) Fix account transfers and CSV escaping
+- [x] [#6](https://github.com/crisricky7/Cash/issues/6) Fix account transfers and CSV escaping
 - [ ] [#7](https://github.com/crisricky7/Cash/issues/7) Split `main.dart` into feature modules
 - [ ] [#8](https://github.com/crisricky7/Cash/issues/8) Document the API with OpenAPI and add architecture notes
 

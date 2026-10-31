@@ -13,7 +13,9 @@ Cash is a personal project owned and maintained by Ricardo Muñoz. Bug reports a
 
 - Build the backend: `dotnet build backend/src/Cash.Api`
 - Analyze the app: `flutter analyze`, from `mobile/cash_app`
-- Add tests when you change behaviour. The test projects are planned in [#2](https://github.com/crisricky7/Cash/issues/2) and [#3](https://github.com/crisricky7/Cash/issues/3).
+- Run the API tests, which need Docker: `dotnet test backend/tests/Cash.Api.Tests`
+- Run the app tests: `flutter test`, from `mobile/cash_app`
+- Add tests when you change behaviour.
 
 ## Data and secrets
 

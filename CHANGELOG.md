@@ -14,6 +14,14 @@ Notable changes to this project, built from the git history. The project has no 
 
 - The database connection and JWT signing key come from the environment. The API refuses to start without them.
 
+- `Transaction.CategoryId` is optional. The project has no migrations, so recreate local databases with `docker compose down -v`.
+
+### Fixed
+
+- Account transfers in the API no longer return 500, and they appear on the dashboard as `Transferencia`.
+- CSV exports in the API and the app escape commas, double quotes and line breaks.
+- The API CSV export labels transfers as `TRANSFERENCIA` and always uses a dot as the decimal separator.
+
 ### Removed
 
 - Hard-coded development credentials and their fallbacks.

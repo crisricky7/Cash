@@ -29,7 +29,7 @@ public class GetDashboardQueryHandler(IUnitOfWork unitOfWork) : IRequestHandler<
 
         var recentDtos = recentTx.Select(t => new TransactionDto(
             t.Id, t.Description, t.Amount, t.Type,
-            t.Category?.Name ?? "General", t.Account?.Name ?? "Cuenta",
+            t.Category?.Name ?? (t.Type == TransactionType.Transfer ? "Transferencia" : "General"), t.Account?.Name ?? "Cuenta",
             t.MemberName, t.Date)).ToList();
 
         var budgetDtos = categories

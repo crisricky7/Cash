@@ -88,3 +88,5 @@ app.MapSmartFeaturesEndpoints();
 app.Run();
 
 public record CreateTransactionRequest(Guid AccountId, Guid CategoryId, decimal Amount, TransactionType Type, string Description);
+
+public partial class Program;
