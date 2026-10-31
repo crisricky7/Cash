@@ -13,7 +13,8 @@ public class JwtProvider(IConfiguration configuration) : IJwtProvider
 {
     public string GenerateToken(User user)
     {
-        var secret = configuration["Jwt:Secret"] ?? "CashSuperSecretKeyForHouseholdApp2026!@#";
+        var secret = configuration["Jwt:Secret"]
+            ?? throw new InvalidOperationException("Falta la variable de entorno Jwt__Secret.");
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

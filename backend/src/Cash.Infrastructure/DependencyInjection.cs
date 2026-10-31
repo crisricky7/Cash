@@ -13,7 +13,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var conn = configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=cash_db;Username=postgres;Password=Password123!";
+            ?? throw new InvalidOperationException("Falta la variable de entorno ConnectionStrings__DefaultConnection.");
         services.AddDbContext<CashDbContext>(opt => opt.UseNpgsql(conn));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddSingleton<IJwtProvider, JwtProvider>();

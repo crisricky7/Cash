@@ -10,9 +10,12 @@ using Cash.Domain.Enums;
 using Cash.Infrastructure;
 using Cash.Infrastructure.Payments;
 using Cash.Infrastructure.Persistence;
+using DotNetEnv;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+
+Env.NoClobber().TraversePath().Load();
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +24,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpClient<PayphoneGatewayService>();
 builder.Services.AddCors(opt => opt.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? "CashSuperSecretKeyForHouseholdApp2026!@#";
+var jwtSecret = builder.Configuration["Jwt:Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret))
+    throw new InvalidOperationException("Falta la variable de entorno Jwt__Secret.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
     {
