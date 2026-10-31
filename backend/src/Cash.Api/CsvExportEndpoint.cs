@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text;
+using Cash.Domain.Enums;
 using Cash.Domain.Interfaces;
 
 namespace Cash.Api;
@@ -15,11 +17,26 @@ public static class CsvExportEndpoint
 
             foreach (var t in txList)
             {
-                var tipo = t.Type == Cash.Domain.Enums.TransactionType.Income ? "INGRESO" : "GASTO";
-                sb.AppendLine($"{t.Date:yyyy-MM-dd},{tipo},{t.Category?.Name},{t.Description},{t.Account?.Name},{t.MemberName},{t.Amount:F2}");
+                var tipo = t.Type switch
+                {
+                    TransactionType.Income => "INGRESO",
+                    TransactionType.Transfer => "TRANSFERENCIA",
+                    _ => "GASTO"
+                };
+                var fecha = t.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var monto = t.Amount.ToString("F2", CultureInfo.InvariantCulture);
+                sb.AppendLine($"{fecha},{tipo},{EscapeField(t.Category?.Name)},{EscapeField(t.Description)},{EscapeField(t.Account?.Name)},{EscapeField(t.MemberName)},{monto}");
             }
 
             return Results.File(Encoding.UTF8.GetBytes(sb.ToString()), "text/csv", "Cash_Reporte.csv");
         }).RequireAuthorization();
+    }
+
+    private static string EscapeField(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        return value.IndexOfAny([',', '"', '\n', '\r']) >= 0
+            ? $"\"{value.Replace("\"", "\"\"")}\""
+            : value;
     }
 }
